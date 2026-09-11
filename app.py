@@ -31,18 +31,26 @@ def create_app():
         except Exception as e:
             print(f"[Vercel Startup Warning]: Database initialization skipped or deferred: {e}")
 
-    # Register API blueprints
-    app.register_blueprint(auth_bp)
-    app.register_blueprint(sector_bp)
-    app.register_blueprint(internship_bp)
-    app.register_blueprint(application_bp)
-    app.register_blueprint(submission_bp)
-    app.register_blueprint(certificate_bp)
-    app.register_blueprint(payment_bp)
-    app.register_blueprint(admin_bp)
-    app.register_blueprint(public_bp)
-    app.register_blueprint(document_bp)
-    app.register_blueprint(master_record_bp)
+    # Register API blueprints with error handling
+    blueprints = [
+        ('auth_bp', auth_bp),
+        ('sector_bp', sector_bp),
+        ('internship_bp', internship_bp),
+        ('application_bp', application_bp),
+        ('submission_bp', submission_bp),
+        ('certificate_bp', certificate_bp),
+        ('payment_bp', payment_bp),
+        ('admin_bp', admin_bp),
+        ('public_bp', public_bp),
+        ('document_bp', document_bp),
+        ('master_record_bp', master_record_bp),
+    ]
+    
+    for name, bp in blueprints:
+        try:
+            app.register_blueprint(bp)
+        except Exception as e:
+            print(f"[ERROR] Failed to register blueprint {name}: {e}")
 
     # Static file serving routes
     @app.route('/templates/<path:path>')
