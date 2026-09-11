@@ -16,17 +16,5 @@
       "dest": "wsgi.py"
     }
   ],
-  "env": {
-    "JWT_SECRET": "@jwt_secret",
-    "SUPABASE_URL": "@supabase_url",
-    "SUPABASE_ANON_KEY": "@supabase_anon_key",
-    "SUPABASE_SERVICE_ROLE_KEY": "@supabase_service_role_key",
-    "GOOGLE_CLIENT_ID": "@google_client_id",
-    "GOOGLE_CLIENT_SECRET": "@google_client_secret",
-    "RESEND_API_KEY": "@resend_api_key",
-    "RAZORPAY_KEY_ID": "@razorpay_key_id",
-    "RAZORPAY_KEY_SECRET": "@razorpay_key_secret",
-    "RAZORPAY_WEBHOOK_SECRET": "@razorpay_webhook_secret",
-    "GOOGLE_SHEETS_WEBHOOK_URL": "@google_sheets_webhook_url"
-  }
+
 }
