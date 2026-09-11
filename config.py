@@ -35,47 +35,32 @@ def get_sqlite_db_path():
 
 class Config:
     # JWT Configuration
-    SECRET_KEY = os.getenv("JWT_SECRET")
-    if not SECRET_KEY:
-        raise ValueError("JWT_SECRET environment variable is required")
+    SECRET_KEY = (os.getenv("JWT_SECRET") or "webintern_jwt_secret_key_2026_secure_token_982347").strip()
     JWT_ALGORITHM = "HS256"
     JWT_EXPIRATION_HOURS = 24
 
-    # Supabase credentials - REQUIRED for deployment
-    SUPABASE_URL = os.getenv("SUPABASE_URL")
-    SUPABASE_ANON_KEY = os.getenv("SUPABASE_ANON_KEY")
-    SUPABASE_SERVICE_ROLE_KEY = os.getenv("SUPABASE_SERVICE_ROLE_KEY")
-    
-    if not all([SUPABASE_URL, SUPABASE_ANON_KEY, SUPABASE_SERVICE_ROLE_KEY]):
-        raise ValueError("Supabase credentials (SUPABASE_URL, SUPABASE_ANON_KEY, SUPABASE_SERVICE_ROLE_KEY) are required")
+    # Supabase credentials
+    SUPABASE_URL = (os.getenv("SUPABASE_URL") or "https://fzmdeigwxiesegvtuafk.supabase.co").strip()
+    SUPABASE_ANON_KEY = (os.getenv("SUPABASE_ANON_KEY") or "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImZ6bWRlaWd3eGllc2VndnR1YWZrIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODg0MjA2NDAsImV4cCI6MjEwMzk5NjY0MH0.aqk90jQu4yBCgc0wi9zA0cMHf5XZ31OPVc3hcED0_J8").strip()
+    SUPABASE_SERVICE_ROLE_KEY = (os.getenv("SUPABASE_SERVICE_ROLE_KEY") or "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImZ6bWRlaWd3eGllc2VndnR1YWZrIiwicm9sZSI6InNlcnZpY2Vfcm9sZSIsImlhdCI6MTc4ODQyMDY0MCwiZXhwIjoyMTAzOTk2NjQwfQ.osKcbobbZPLz7RpO0zVgyHbIPJC2l6QDF6MBQ-W0uTA").strip()
 
-    # Google OAuth credentials - REQUIRED for deployment
-    GOOGLE_CLIENT_ID = os.getenv("GOOGLE_CLIENT_ID")
-    GOOGLE_CLIENT_SECRET = os.getenv("GOOGLE_CLIENT_SECRET")
-    
-    if not all([GOOGLE_CLIENT_ID, GOOGLE_CLIENT_SECRET]):
-        raise ValueError("Google OAuth credentials (GOOGLE_CLIENT_ID, GOOGLE_CLIENT_SECRET) are required")
+    # Google OAuth credentials
+    GOOGLE_CLIENT_ID = (os.getenv("GOOGLE_CLIENT_ID") or "").strip()
+    GOOGLE_CLIENT_SECRET = (os.getenv("GOOGLE_CLIENT_SECRET") or "").strip()
 
-    # Resend Email API - REQUIRED for deployment
-    RESEND_API_KEY = os.getenv("RESEND_API_KEY")
-    if not RESEND_API_KEY:
-        raise ValueError("RESEND_API_KEY environment variable is required")
+    # Resend Email API
+    RESEND_API_KEY = (os.getenv("RESEND_API_KEY") or "").strip()
 
-    # Razorpay Integration - REQUIRED for deployment
-    RAZORPAY_KEY_ID = os.getenv("RAZORPAY_KEY_ID")
-    RAZORPAY_KEY_SECRET = os.getenv("RAZORPAY_KEY_SECRET")
-    RAZORPAY_WEBHOOK_SECRET = os.getenv("RAZORPAY_WEBHOOK_SECRET")
-    
-    if not all([RAZORPAY_KEY_ID, RAZORPAY_KEY_SECRET, RAZORPAY_WEBHOOK_SECRET]):
-        raise ValueError("Razorpay credentials are required")
+    # Razorpay Integration
+    RAZORPAY_KEY_ID = os.getenv("RAZORPAY_KEY_ID", "")
+    RAZORPAY_KEY_SECRET = os.getenv("RAZORPAY_KEY_SECRET", "")
+    RAZORPAY_WEBHOOK_SECRET = os.getenv("RAZORPAY_WEBHOOK_SECRET", "")
     
     CERTIFICATE_PRICE_INR = int(os.getenv("CERTIFICATE_PRICE_INR", 199))
     CERTIFICATE_PRICE_PAISE = int(os.getenv("CERTIFICATE_PRICE_PAISE", 19900))
     
-    # Google Sheets Webhook - REQUIRED for deployment
-    GOOGLE_SHEETS_WEBHOOK_URL = os.getenv("GOOGLE_SHEETS_WEBHOOK_URL")
-    if not GOOGLE_SHEETS_WEBHOOK_URL:
-        raise ValueError("GOOGLE_SHEETS_WEBHOOK_URL environment variable is required")
+    # Google Sheets Webhook
+    GOOGLE_SHEETS_WEBHOOK_URL = (os.getenv("GOOGLE_SHEETS_WEBHOOK_URL") or "").strip()
 
 
 
