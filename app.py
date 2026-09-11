@@ -93,6 +93,14 @@ def create_app():
             'templates': templates
         }), 200
 
+    @app.route('/health')
+    def health_check():
+        return jsonify({
+            'status': 'ok',
+            'message': 'Web Intern API is running',
+            'blueprints_registered': len(app.blueprints)
+        }), 200
+
     @app.route('/')
     def serve_index():
         static_dir = os.path.join(os.path.dirname(__file__), 'static')

@@ -1,12 +1,14 @@
 {
   "version": 2,
+  "buildCommand": "pip install -r requirements.txt",
   "builds": [
     {
       "src": "wsgi.py",
       "use": "@vercel/python",
       "config": {
         "maxLambdaSize": "50mb",
-        "runtime": "python3.11"
+        "runtime": "python3.11",
+        "includeFiles": "**"
       }
     }
   ],
@@ -15,5 +17,8 @@
       "src": "/(.*)",
       "dest": "wsgi.py"
     }
-  ]
+  ],
+  "env": {
+    "PYTHONUNBUFFERED": "1"
+  }
 }
