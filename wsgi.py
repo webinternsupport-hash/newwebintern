@@ -6,13 +6,8 @@ This file is used by the Vercel Python runtime to start the application.
 import os
 from app import create_app
 
-# Create Flask app instance
+# Create Flask app instance for Vercel
 app = create_app()
-
-# Vercel cold start handler
-def handler(request):
-    """Handler for Vercel serverless functions"""
-    return app(request.environ, request.start_response)
 
 # For local testing with gunicorn
 if __name__ == "__main__":
