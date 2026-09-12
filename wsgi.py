@@ -1,47 +1,42 @@
 """
-WSGI entry point for production deployment on Vercel.
-This file is used by the Vercel Python runtime to start the application.
+WSGI entry point for Vercel deployment
 """
-
 import os
 import sys
 import traceback
-
-# Minimal Flask app for Vercel
 from flask import Flask, jsonify
 
+# Create minimal fallback app
 def create_minimal_app():
-    """Create a minimal Flask app for testing"""
-    app = Flask(__name__)
+    minimal_app = Flask(__name__)
     
-    @app.route('/health')
+    @minimal_app.route('/health')
     def health():
-        return jsonify({'status': 'ok', 'message': 'Minimal health check'}), 200
+        return jsonify({'status': 'ok'}), 200
     
-    @app.route('/')
+    @minimal_app.route('/')
     def index():
-        return jsonify({'message': 'Web Intern API - Minimal Version'}), 200
+        return jsonify({'message': 'API is running'}), 200
     
-    return app
+    return minimal_app
 
-# Try to load full app, fall back to minimal
+# Initialize app - Vercel needs this at module level
+app = None
+
 try:
     from app import create_app
     app = create_app()
-    print("[SUCCESS] Full app loaded", file=sys.stderr)
-except ImportError as e:
-    print(f"[WARNING] Full app import failed: {e}", file=sys.stderr)
-    print("Falling back to minimal app", file=sys.stderr)
-    app = create_minimal_app()
+    sys.stderr.write("[SUCCESS] Full Flask app loaded\n")
 except Exception as e:
-    print(f"[ERROR] App creation failed: {e}", file=sys.stderr)
+    sys.stderr.write(f"[WARNING] Failed to load full app: {e}\n")
     traceback.print_exc(file=sys.stderr)
     app = create_minimal_app()
+    sys.stderr.write("[FALLBACK] Using minimal app\n")
 
-# Vercel requires 'app' to be exported at module level
-__all__ = ['app']
+# Ensure app exists
+if app is None:
+    app = create_minimal_app()
 
-# For local testing
 if __name__ == "__main__":
     port = int(os.getenv("PORT", 5000))
     app.run(host="0.0.0.0", port=port, debug=False)
