@@ -28,7 +28,7 @@ def create_minimal_app():
 try:
     from app import create_app
     app = create_app()
-    print("[SUCCESS] Full app loaded")
+    print("[SUCCESS] Full app loaded", file=sys.stderr)
 except ImportError as e:
     print(f"[WARNING] Full app import failed: {e}", file=sys.stderr)
     print("Falling back to minimal app", file=sys.stderr)
@@ -37,6 +37,9 @@ except Exception as e:
     print(f"[ERROR] App creation failed: {e}", file=sys.stderr)
     traceback.print_exc(file=sys.stderr)
     app = create_minimal_app()
+
+# Vercel requires 'app' to be exported at module level
+__all__ = ['app']
 
 # For local testing
 if __name__ == "__main__":
