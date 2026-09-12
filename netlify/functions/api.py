@@ -1,5 +1,6 @@
 """
 Netlify Functions handler for Flask app
+Properly handles Netlify event structure
 """
 import os
 import sys
@@ -18,7 +19,7 @@ def create_minimal_app():
     
     @app.route('/health')
     def health():
-        return jsonify({'status': 'ok', 'message': 'Netlify is running'}), 200
+        return jsonify({'status': 'ok', 'message': 'Netlify Functions working'}), 200
     
     @app.route('/')
     def index():
@@ -31,9 +32,9 @@ app = None
 try:
     from app import create_app
     app = create_app()
-    sys.stderr.write("[SUCCESS] Full Flask app loaded\n")
+    print("[SUCCESS] Full Flask app loaded", file=sys.stderr)
 except Exception as e:
-    sys.stderr.write(f"[ERROR] Failed to load app: {e}\n")
+    print(f"[ERROR] Failed to load app: {e}", file=sys.stderr)
     traceback.print_exc(file=sys.stderr)
     app = create_minimal_app()
 
@@ -41,13 +42,22 @@ if app is None:
     app = create_minimal_app()
 
 def handler(event, context):
-    """Netlify Functions handler - converts event to WSGI"""
+    """Netlify Functions handler"""
     try:
-        http_method = event.get('httpMethod', 'GET').upper()
-        path = event.get('path', '/')
-        query_string = event.get('rawQueryString', '')
-        headers = event.get('headers', {})
-        body = event.get('body', '')
+        # Default values
+        http_method = 'GET'
+        path = '/'
+        query_string = ''
+        headers = {}
+        body = ''
+        
+        # Safely extract event properties
+        if event and isinstance(event, dict):
+            http_method = (event.get('httpMethod') or 'GET').upper()
+            path = event.get('path') or '/'
+            query_string = event.get('rawQueryString') or ''
+            headers = event.get('headers') or {}
+            body = event.get('body') or ''
         
         # Create WSGI environ dict
         environ = {
@@ -55,9 +65,9 @@ def handler(event, context):
             'SCRIPT_NAME': '',
             'PATH_INFO': path,
             'QUERY_STRING': query_string,
-            'CONTENT_TYPE': headers.get('content-type', ''),
-            'CONTENT_LENGTH': headers.get('content-length', ''),
-            'SERVER_NAME': headers.get('host', 'localhost').split(':')[0],
+            'CONTENT_TYPE': headers.get('content-type', '') if headers else '',
+            'CONTENT_LENGTH': headers.get('content-length', '') if headers else '',
+            'SERVER_NAME': (headers.get('host', 'localhost') if headers else 'localhost').split(':')[0],
             'SERVER_PORT': '443',
             'SERVER_PROTOCOL': 'HTTP/1.1',
             'wsgi.version': (1, 0),
@@ -70,43 +80,53 @@ def handler(event, context):
         }
         
         # Add HTTP headers
-        for key, value in headers.items():
-            key = key.upper().replace('-', '_')
-            if key not in ('CONTENT_TYPE', 'CONTENT_LENGTH'):
-                environ[f'HTTP_{key}'] = value
+        if headers:
+            for key, value in headers.items():
+                key_upper = key.upper().replace('-', '_')
+                if key_upper not in ('CONTENT_TYPE', 'CONTENT_LENGTH'):
+                    environ[f'HTTP_{key_upper}'] = value
         
         # Response collection
         status_code = 200
-        response_headers = []
+        response_headers = {}
         
         def start_response(status, headers_list):
-            nonlocal status_code
+            nonlocal status_code, response_headers
             status_code = int(status.split()[0])
+            response_headers = dict(headers_list) if headers_list else {}
             return lambda s: None
         
         # Call Flask WSGI app
-        response = app(environ, start_response)
-        
-        # Collect response body
-        body_parts = []
-        for data in response:
-            if data:
-                body_parts.append(data)
-        
-        response_body = b''.join(body_parts)
-        
-        if hasattr(response, 'close'):
-            response.close()
-        
-        # Build response
-        return {
-            'statusCode': status_code,
-            'headers': {'Content-Type': 'application/json'},
-            'body': response_body.decode('utf-8', errors='ignore') if isinstance(response_body, bytes) else response_body
-        }
+        try:
+            response = app(environ, start_response)
+            
+            # Collect response body
+            body_parts = []
+            for data in response:
+                if data:
+                    body_parts.append(data)
+            
+            response_body = b''.join(body_parts)
+            
+            if hasattr(response, 'close'):
+                response.close()
+            
+            # Return response
+            return {
+                'statusCode': status_code,
+                'headers': response_headers or {'Content-Type': 'application/json'},
+                'body': response_body.decode('utf-8', errors='ignore') if isinstance(response_body, bytes) else str(response_body)
+            }
+        except Exception as app_error:
+            print(f"[ERROR] App execution error: {app_error}", file=sys.stderr)
+            traceback.print_exc(file=sys.stderr)
+            return {
+                'statusCode': 500,
+                'body': json.dumps({'error': 'Internal server error'})
+            }
     
     except Exception as e:
-        sys.stderr.write(f"[ERROR] Handler failed: {e}\n")
+        print(f"[ERROR] Handler error: {e}", file=sys.stderr)
         traceback.print_exc(file=sys.stderr)
         return {
             'statusCode': 500,
