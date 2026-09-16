@@ -89,6 +89,25 @@ def _init_db_tables():
     );
     """)
 
+    # Seed default admin accounts if missing
+    try:
+        from utils.auth import hash_password
+        import uuid
+        default_admins = [
+            ('admin@webintern.com', 'admin123', 'System Administrator'),
+            ('admin@webintern.in', 'admin123', 'WebIntern Admin')
+        ]
+        for admin_email, admin_pw, admin_name in default_admins:
+            cursor.execute("SELECT id FROM admins WHERE LOWER(email) = ?", (admin_email,))
+            if not cursor.fetchone():
+                cursor.execute(
+                    "INSERT INTO admins (id, email, password_hash, full_name) VALUES (?, ?, ?, ?)",
+                    (str(uuid.uuid4()), admin_email, hash_password(admin_pw), admin_name)
+                )
+    except Exception as e:
+        log_error(f"Failed to auto-seed admin accounts: {e}")
+
+
     # 3. Sectors (Domain Tracks)
     cursor.execute("""
     CREATE TABLE IF NOT EXISTS sectors (

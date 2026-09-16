@@ -44,7 +44,7 @@ def generate_qr_code_file(url):
 
 class NumberedCanvas(canvas.Canvas):
     """
-    Custom canvas drawing borders per document type (B&W for Offer Letter, Gold/Navy for Certificate)
+    Custom canvas drawing executive borders per document type (Royal Blue/Gold Banners for Offer Letter, Dual Gold/Navy Frame & Corner Ornaments for Certificate)
     """
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
@@ -67,27 +67,50 @@ class NumberedCanvas(canvas.Canvas):
         
         if width > height:
             # Full Color Executive Certificate Frame (Landscape)
+            # Outer Gold Accent Border
             self.setStrokeColor(colors.HexColor('#D97706'))
             self.setLineWidth(3.5)
             self.rect(14, 14, width - 28, height - 28)
             
+            # Inner Royal Navy Border
             self.setStrokeColor(colors.HexColor('#1E3A8A'))
             self.setLineWidth(1.5)
             self.rect(19, 19, width - 38, height - 38)
+
+            # Executive Corner Ornaments (Gold Corner Lines)
+            self.setStrokeColor(colors.HexColor('#D97706'))
+            self.setLineWidth(2.0)
+            # Top-Left
+            self.line(24, height - 24, 40, height - 24)
+            self.line(24, height - 24, 24, height - 40)
+            # Top-Right
+            self.line(width - 24, height - 24, width - 40, height - 24)
+            self.line(width - 24, height - 24, width - 24, height - 40)
+            # Bottom-Left
+            self.line(24, 24, 40, 24)
+            self.line(24, 24, 24, 40)
+            # Bottom-Right
+            self.line(width - 24, 24, width - 40, 24)
+            self.line(width - 24, 24, width - 24, 40)
         else:
-            # Black & White Formal Corporate Offer Letter Borders (Portrait)
+            # Executive Corporate Offer Letter Banners (Portrait)
+            # Top Royal Navy Header Bar
+            self.setFillColor(colors.HexColor('#1E3A8A'))
+            self.rect(0, height - 8, width, 8, fill=1, stroke=0)
+            # Top Gold Accent Ribbon
+            self.setFillColor(colors.HexColor('#D97706'))
+            self.rect(0, height - 11, width, 3, fill=1, stroke=0)
+            # Bottom Dark Slate Footer Bar
             self.setFillColor(colors.HexColor('#0F172A'))
-            self.rect(0, height - 6, width, 6, fill=1, stroke=0)
-            self.setFillColor(colors.HexColor('#334155'))
-            self.rect(0, 0, width, 4, fill=1, stroke=0)
+            self.rect(0, 0, width, 5, fill=1, stroke=0)
             
         self.restoreState()
 
 
 def generate_offer_letter_pdf(student_name, email, internship_title, start_date, end_date, doc_number, guide_name="Dr. A. K. Sharma (Technical Director)"):
     """
-    Generates an Ultra-Formal Corporate Offer Letter PDF in clean paragraph format without tables.
-    Features: Official MSME Logo, WebIntern Logo, Clear Header 'INTERNSHIP OFFER LETTER', Clean Founder Signature, and Dynamic QR Code.
+    Generates an Ultra-Formal Executive Corporate Offer Letter PDF.
+    Features: Royal Blue & Gold Banners, Styled Program Summary Box, Official MSME Logo, WebIntern Logo, Founder Signature, and Dynamic QR Code.
     """
     file_name = f"{doc_number}.pdf"
     file_path = os.path.join(Config.OFFER_LETTERS_DIR, file_name)
@@ -114,8 +137,8 @@ def generate_offer_letter_pdf(student_name, email, internship_title, start_date,
         'BodyBW',
         parent=styles['Normal'],
         fontName='Helvetica',
-        fontSize=10,
-        leading=15,
+        fontSize=9.5,
+        leading=14.5,
         textColor=colors.HexColor('#1E293B')
     )
 
@@ -123,8 +146,8 @@ def generate_offer_letter_pdf(student_name, email, internship_title, start_date,
         'BoldBodyBW',
         parent=styles['Normal'],
         fontName='Helvetica-Bold',
-        fontSize=10,
-        leading=15,
+        fontSize=9.5,
+        leading=14.5,
         textColor=colors.HexColor('#0F172A')
     )
 
@@ -142,7 +165,7 @@ def generate_offer_letter_pdf(student_name, email, internship_title, start_date,
         [
             logo_img,
             msme_img,
-            Paragraph(f"<b>INTERNSHIP OFFER LETTER</b><br/><font size=8 color='#2563EB'><b>WEB INTERN PLATFORM</b></font><br/><font size=7.5 color='#475569'>Ref: {doc_number}<br/>Date: {datetime.date.today().strftime('%B %d, %Y')}</font>", ParagraphStyle('RHeadBW', alignment=2, fontName='Helvetica', fontSize=8.5, leading=12))
+            Paragraph(f"<b>INTERNSHIP OFFER LETTER</b><br/><font size=8 color='#1E3A8A'><b>WEB INTERN PLATFORM</b></font><br/><font size=7.5 color='#475569'>Ref: {doc_number}<br/>Date: {datetime.date.today().strftime('%B %d, %Y')}</font>", ParagraphStyle('RHeadBW', alignment=2, fontName='Helvetica', fontSize=8.5, leading=12))
         ]
     ]
     header_table = Table(header_data, colWidths=[160, 150, 210])
@@ -151,35 +174,48 @@ def generate_offer_letter_pdf(student_name, email, internship_title, start_date,
         ('BOTTOMPADDING', (0,0), (-1,-1), 6),
     ]))
     story.append(header_table)
-    story.append(Spacer(1, 8))
-    story.append(Paragraph("<hr color='#0F172A' size=1.5/>", body_style))
-    story.append(Spacer(1, 14))
+    story.append(Spacer(1, 6))
+    story.append(Paragraph("<hr color='#1E3A8A' size=1.5/>", body_style))
+    story.append(Spacer(1, 10))
     
     # 2. Recipient Details & Subject Line
     story.append(Paragraph(f"<b>To,</b><br/><b>{student_name}</b><br/><font color='#475569'>{email}</font>", bold_body_style))
-    story.append(Spacer(1, 12))
+    story.append(Spacer(1, 10))
     
     subject_text = f"<b>Subject: INTERNSHIP OFFER LETTER — {internship_title}</b>"
     story.append(Paragraph(subject_text, ParagraphStyle('SubjStyle', parent=bold_body_style, fontSize=10.5, textColor=colors.HexColor('#1E3A8A'))))
     story.append(Spacer(1, 10))
     
-    # 3. Formal Offer Letter Paragraphs (No Tables)
+    # 3. Formal Offer Letter Paragraphs & Styled Summary Box
     p1 = (
         f"Dear <b>{student_name}</b>,<br/><br/>"
         f"We are pleased to offer you an appointment for the <b>4-Week Virtual Internship Program</b> in <b>{internship_title}</b> at <b>Web Intern Platform</b>. "
         f"Following the evaluation of your academic profile and credentials, the Selection Board is confident in your ability to contribute effectively to our enterprise projects."
     )
     story.append(Paragraph(p1, body_style))
-    story.append(Spacer(1, 12))
-    
-    p2 = (
-        f"<b>Program Overview & Tenure:</b><br/>"
-        f"Your virtual internship is scheduled to commence on <b>{start_date}</b> and conclude on <b>{end_date}</b>. "
-        f"The program will be conducted in a virtual/remote format under the technical mentorship of <b>{guide_name}</b>. "
-        f"During this tenure, you will work on industry capstones, complete weekly deliverables, and gain practical hands-on development experience."
-    )
-    story.append(Paragraph(p2, body_style))
-    story.append(Spacer(1, 12))
+    story.append(Spacer(1, 10))
+
+    # Styled Program Details Summary Box
+    summary_data = [
+        [
+            Paragraph("<b>INTERNSHIP PROGRAM SPECIFICATIONS</b>", ParagraphStyle('BoxHead', parent=bold_body_style, fontSize=9, textColor=colors.HexColor('#1E3A8A'))),
+            Paragraph(f"<b>Format:</b> Virtual / Remote", ParagraphStyle('BoxMode', parent=body_style, fontSize=8.5, alignment=2))
+        ],
+        [
+            Paragraph(f"<b>Domain Track:</b> {internship_title}<br/><b>Start Date:</b> {start_date}", body_style),
+            Paragraph(f"<b>Technical Mentor:</b> {guide_name}<br/><b>End Date:</b> {end_date}", body_style)
+        ]
+    ]
+    summary_table = Table(summary_data, colWidths=[260, 260])
+    summary_table.setStyle(TableStyle([
+        ('BACKGROUND', (0,0), (-1,-1), colors.HexColor('#F8FAFC')),
+        ('BOX', (0,0), (-1,-1), 1, colors.HexColor('#CBD5E1')),
+        ('LINEBELOW', (0,0), (-1,0), 0.5, colors.HexColor('#E2E8F0')),
+        ('PADDING', (0,0), (-1,-1), 7),
+        ('VALIGN', (0,0), (-1,-1), 'MIDDLE'),
+    ]))
+    story.append(summary_table)
+    story.append(Spacer(1, 10))
     
     p3 = (
         f"<b>Terms & Guidelines:</b><br/>"
@@ -189,13 +225,13 @@ def generate_offer_letter_pdf(student_name, email, internship_title, start_date,
         f"• <b>Code of Conduct:</b> All submitted work must be original and adhere to professional integrity standards."
     )
     story.append(Paragraph(p3, body_style))
-    story.append(Spacer(1, 14))
+    story.append(Spacer(1, 10))
 
     p4 = (
         f"We welcome you to Web Intern Platform and wish you an enriching and successful internship experience."
     )
     story.append(Paragraph(p4, body_style))
-    story.append(Spacer(1, 18))
+    story.append(Spacer(1, 14))
     
     # 4. Signatures Footer Table (Founder Title, Verified Badge, QR Code - NO Founder Name)
     founder_sig_img = RLImage(FOUNDER_SIG_PATH, width=125, height=35) if os.path.exists(FOUNDER_SIG_PATH) else Paragraph("<b>[SIGNATURE]</b>", bold_body_style)
@@ -204,7 +240,7 @@ def generate_offer_letter_pdf(student_name, email, internship_title, start_date,
     
     sig_cell_data = [
         [Paragraph("<b>Authorized Signatory</b>", bold_body_style)],
-        [Spacer(1, 3)],
+        [Spacer(1, 2)],
         [founder_sig_img],
         [Spacer(1, 2)],
         [Paragraph("<b>Founder & Managing Director</b><br/><font size=7.5 color='#475569'>Web Intern Platform</font>", body_style)]
@@ -220,7 +256,7 @@ def generate_offer_letter_pdf(student_name, email, internship_title, start_date,
         [
             sig_cell_table,
             badge_img,
-            Paragraph(f"<b>MSME Govt Recognized</b><br/><font size=7.5 color='#0F172A'><b>[VERIFIED ISSUER]</b></font><br/><font size=7.5 color='#475569'>Doc Ref: {doc_number}</font>", ParagraphStyle('MidSealBW', alignment=1, fontName='Helvetica', fontSize=8, leading=11)),
+            Paragraph(f"<b>MSME Govt Recognized</b><br/><font size=7.5 color='#15803D'><b>[VERIFIED ISSUER]</b></font><br/><font size=7.5 color='#475569'>Doc Ref: {doc_number}</font>", ParagraphStyle('MidSealBW', alignment=1, fontName='Helvetica', fontSize=8, leading=11)),
             qr_img
         ]
     ]
@@ -311,7 +347,7 @@ def generate_certificate_pdf(student_name, internship_title, start_date, end_dat
         [
             msme_img,
             logo_img,
-            Paragraph(f"<b>CREDENTIAL ID:</b><br/><font color='#2563EB'><b>{cert_id}</b></font><br/><font size=8 color='#64748B'>Date: {datetime.date.today().strftime('%B %d, %Y')}</font>", ParagraphStyle('RightRefCol', alignment=2, fontName='Helvetica', fontSize=8.5, leading=12))
+            Paragraph(f"<b>CREDENTIAL ID:</b><br/><font color='#1E3A8A'><b>{cert_id}</b></font><br/><font size=8 color='#64748B'>Date: {datetime.date.today().strftime('%B %d, %Y')}</font>", ParagraphStyle('RightRefCol', alignment=2, fontName='Helvetica', fontSize=8.5, leading=12))
         ]
     ]
     top_table = Table(top_header_data, colWidths=[200, 380, 200])
@@ -337,7 +373,7 @@ def generate_certificate_pdf(student_name, internship_title, start_date, end_dat
     # 3. Core Achievement Statement
     body_content = (
         f"for successfully completing the <b>4-Week Virtual Internship Program</b> in "
-        f"<b><font color='#2563EB'>{internship_title}</font></b><br/>"
+        f"<b><font color='#1E3A8A'>{internship_title}</font></b><br/>"
         f"conducted from <b>{start_date}</b> to <b>{end_date}</b>.<br/>"
         f"The candidate demonstrated exceptional technical performance in weekly capstone deliverables and domain project evaluations."
     )
