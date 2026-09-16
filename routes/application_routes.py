@@ -214,24 +214,30 @@ def get_my_applications():
     """, (user_id, user_email, user_email))
     apps = [dict(r) for r in cursor.fetchall()]
     
-    # Fallback to Supabase if 0 local apps found
-    if not apps and user_email:
+    # Always check Supabase to restore any enrollments created on other devices (Mobile/Laptop)
+    if user_email:
         from utils.supabase_client import fetch_applications_from_supabase
         sp_apps = fetch_applications_from_supabase(user_id, user_email)
         if sp_apps:
             for sa in sp_apps:
-                app_id = sa.get('id')
-                intern_id = sa.get('internship_id')
-                if app_id and intern_id:
+                app_id_val = sa.get('id')
+                intern_id_val = sa.get('internship_id')
+                cert_id_val = sa.get('certificate_id')
+                if app_id_val and intern_id_val:
                     cursor.execute("""
                         INSERT OR IGNORE INTO applications (id, user_id, internship_id, status, offer_letter_sent, start_date, end_date, offer_letter_id, certificate_id, completion_status, google_sync_status)
                         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
                     """, (
-                        app_id, user_id, intern_id, sa.get('status', 'active'),
+                        app_id_val, user_id, intern_id_val, sa.get('status', 'active'),
                         sa.get('offer_letter_sent', 1), sa.get('start_date'), sa.get('end_date'),
-                        sa.get('offer_letter_id'), sa.get('certificate_id'), sa.get('completion_status', 'pending'),
+                        sa.get('offer_letter_id'), cert_id_val, sa.get('completion_status', 'pending'),
                         sa.get('google_sync_status', 'synced')
                     ))
+                    if cert_id_val:
+                        cursor.execute("""
+                            INSERT OR IGNORE INTO certificates (id, application_id, certificate_url, is_verified_paid, issued_at)
+                            VALUES (?, ?, ?, 0, CURRENT_TIMESTAMP)
+                        """, (cert_id_val, app_id_val, f"/api/certificates/{cert_id_val}/pdf"))
             conn.commit()
             
             cursor.execute("""
@@ -284,15 +290,41 @@ def download_offer_letter(app_id):
     app_record = cursor.fetchone()
     
     if not app_record:
+        # Fallback to Supabase PostgREST if not in local SQLite
+        from utils.supabase_client import fetch_applications_from_supabase
+        from config import Config
+        import requests
+        
+        url = Config.SUPABASE_URL
+        key = Config.SUPABASE_SERVICE_ROLE_KEY or Config.SUPABASE_ANON_KEY
+        headers = {'apikey': key, 'Authorization': f"Bearer {key}"}
+        
+        try:
+            r = requests.get(f"{url}/rest/v1/applications?or=(id.eq.{app_id},offer_letter_id.eq.{app_id})&select=*", headers=headers, timeout=5)
+            if r.status_code == 200 and r.json():
+                sa = r.json()[0]
+                cursor.execute("""
+                    INSERT OR REPLACE INTO applications (id, user_id, internship_id, status, offer_letter_sent, start_date, end_date, offer_letter_id, certificate_id, completion_status)
+                    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                """, (
+                    sa.get('id'), sa.get('user_id'), sa.get('internship_id'), sa.get('status', 'active'),
+                    sa.get('offer_letter_sent', 1), sa.get('start_date'), sa.get('end_date'),
+                    sa.get('offer_letter_id'), sa.get('certificate_id'), sa.get('completion_status', 'pending')
+                ))
+                conn.commit()
+                cursor.execute("SELECT * FROM applications WHERE id = ? OR offer_letter_id = ?", (app_id, app_id))
+                app_record = cursor.fetchone()
+        except Exception:
+            pass
+
+    if not app_record:
         conn.close()
         return jsonify({'error': 'Application record not found'}), 404
         
     doc_number = app_record['offer_letter_id']
-    pdf_filename = f"{doc_number}.pdf"
-    file_path = os.path.join(Config.OFFER_LETTERS_DIR, pdf_filename)
     
     # Always fetch student & program details to ensure fresh generation with latest assets & QR code
-    cursor.execute("SELECT full_name, email FROM profiles WHERE id = ?", (app_record['user_id'],))
+    cursor.execute("SELECT full_name, email FROM profiles WHERE id = ? OR LOWER(email) = ?", (app_record['user_id'], app_record['user_id']))
     prof = cursor.fetchone()
     cursor.execute("SELECT title, guide_name FROM internships WHERE id = ?", (app_record['internship_id'],))
     intern = cursor.fetchone()
@@ -309,4 +341,9 @@ def download_offer_letter(app_id):
         doc_number=doc_number, guide_name=g_name
     )
         
-    return send_file(file_path, mimetype='application/pdf', as_attachment=False, download_name=f"Offer_Letter_{doc_number}.pdf")
+    return send_file(
+        file_path,
+        mimetype='application/pdf',
+        as_attachment=False,
+        download_name=f"Offer_Letter_{doc_number}.pdf"
+    )

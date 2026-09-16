@@ -380,7 +380,7 @@ def sync_application_to_supabase_async(app_data, cert_data=None, master_data=Non
 
 def fetch_applications_from_supabase(user_id, email):
     """
-    Fetches applications from Supabase PostgREST for a given user_id or email.
+    Fetches all applications from Supabase PostgREST for a given user_id or email without missing any enrollments.
     """
     url = Config.SUPABASE_URL
     service_key = Config.SUPABASE_SERVICE_ROLE_KEY or Config.SUPABASE_ANON_KEY
@@ -392,26 +392,28 @@ def fetch_applications_from_supabase(user_id, email):
         'Authorization': f"Bearer {service_key}"
     }
 
-    apps = []
+    apps_dict = {}
     try:
-        clean_user_id = str(user_id).strip()
-        resp = requests.get(
-            f"{url}/rest/v1/applications?user_id=eq.{clean_user_id}&select=*",
-            headers=headers,
-            timeout=8
-        )
-        if resp.status_code == 200:
-            apps = resp.json()
+        clean_user_id = str(user_id).strip() if user_id else ''
+        if clean_user_id:
+            resp = requests.get(
+                f"{url}/rest/v1/applications?user_id=eq.{clean_user_id}&select=*",
+                headers=headers,
+                timeout=8
+            )
+            if resp.status_code == 200:
+                for a in resp.json():
+                    apps_dict[a['id']] = a
 
-        if not apps and email:
-            # Try matching via master_internships email
+        if email:
+            clean_email = email.lower().strip()
             resp2 = requests.get(
-                f"{url}/rest/v1/master_internships?student_email=eq.{email.lower()}&select=application_id",
+                f"{url}/rest/v1/master_internships?student_email=eq.{clean_email}&select=application_id",
                 headers=headers,
                 timeout=8
             )
             if resp2.status_code == 200 and resp2.json():
-                app_ids = [m['application_id'] for m in resp2.json() if m.get('application_id')]
+                app_ids = [m['application_id'] for m in resp2.json() if m.get('application_id') and m['application_id'] not in apps_dict]
                 if app_ids:
                     id_list = ",".join(app_ids)
                     resp3 = requests.get(
@@ -420,11 +422,12 @@ def fetch_applications_from_supabase(user_id, email):
                         timeout=8
                     )
                     if resp3.status_code == 200:
-                        apps = resp3.json()
+                        for a in resp3.json():
+                            apps_dict[a['id']] = a
     except Exception as e:
         log_error(f"Exception fetching applications from Supabase: {e}")
 
-    return apps
+    return list(apps_dict.values())
 
 
 

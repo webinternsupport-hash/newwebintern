@@ -106,12 +106,49 @@ def download_certificate_pdf(cert_id):
     """, (cert_id, cert_id))
     
     row = cursor.fetchone()
+
     if not row:
-        conn.close()
-        return jsonify({'error': 'Certificate record not found'}), 404
-        
-    c_info = dict(row)
+        # Check master record fallback locally
+        cursor.execute("SELECT * FROM master_internships WHERE certificate_id = ? OR offer_id = ?", (cert_id, cert_id))
+        master_row = cursor.fetchone()
+        if master_row:
+            c_info = {
+                'student_name': master_row['student_full_name'],
+                'internship_title': master_row['internship_position'],
+                'start_date': master_row['internship_start_date'],
+                'end_date': master_row['internship_end_date'],
+                'is_verified_paid': 1,
+                'completion_status': 'completed'
+            }
+        else:
+            # Fallback to Supabase PostgREST master_internships
+            try:
+                import requests
+                url = Config.SUPABASE_URL
+                key = Config.SUPABASE_SERVICE_ROLE_KEY or Config.SUPABASE_ANON_KEY
+                headers = {'apikey': key, 'Authorization': f"Bearer {key}"}
+                r = requests.get(f"{url}/rest/v1/master_internships?certificate_id=eq.{cert_id}&select=*", headers=headers, timeout=5)
+                if r.status_code == 200 and r.json():
+                    sm = r.json()[0]
+                    c_info = {
+                        'student_name': sm.get('student_full_name', 'Student'),
+                        'internship_title': sm.get('internship_position', 'Virtual Internship Program'),
+                        'start_date': sm.get('internship_start_date', '2026-01-01'),
+                        'end_date': sm.get('internship_end_date', '2026-02-01'),
+                        'is_verified_paid': 1,
+                        'completion_status': 'completed'
+                    }
+                else:
+                    c_info = None
+            except Exception:
+                c_info = None
+    else:
+        c_info = dict(row)
+
     conn.close()
+
+    if not c_info:
+        return jsonify({'error': 'Certificate record not found'}), 404
 
     # Tenure completion check: must be after end_date or completion_status == 'completed'
     is_ended = False
@@ -150,5 +187,9 @@ def download_certificate_pdf(cert_id):
         is_paid=True
     )
 
-    
-    return send_file(pdf_path, mimetype='application/pdf', as_attachment=False, download_name=f"Certificate_{cert_id}.pdf")
+    return send_file(
+        pdf_path,
+        mimetype='application/pdf',
+        as_attachment=False,
+        download_name=f"Certificate_{cert_id}.pdf"
+    )
