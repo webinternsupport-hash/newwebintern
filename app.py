@@ -43,15 +43,26 @@ def create_app():
     else:
         print("INFO: Skipping init_db() in Vercel environment (read-only filesystem)", file=sys.stderr)
     
-    # Register Blueprints
-    app.register_blueprint(auth_bp)
-    app.register_blueprint(sector_bp)
-    app.register_blueprint(internship_bp)
-    app.register_blueprint(application_bp)
-    app.register_blueprint(submission_bp)
-    app.register_blueprint(certificate_bp)
-    app.register_blueprint(payment_bp)
-    app.register_blueprint(admin_bp)
+    # Register Blueprints with error handling
+    blueprints = [
+        ('auth', auth_bp),
+        ('sector', sector_bp),
+        ('internship', internship_bp),
+        ('application', application_bp),
+        ('submission', submission_bp),
+        ('certificate', certificate_bp),
+        ('payment', payment_bp),
+        ('admin', admin_bp),
+    ]
+    
+    for bp_name, bp in blueprints:
+        try:
+            app.register_blueprint(bp)
+            print(f"INFO: Registered blueprint: {bp_name}", file=sys.stderr)
+        except Exception as e:
+            print(f"WARNING: Failed to register blueprint '{bp_name}': {e}", file=sys.stderr)
+            import traceback
+            traceback.print_exc(file=sys.stderr)
     
     # Serve SPA index
     @app.route('/')
