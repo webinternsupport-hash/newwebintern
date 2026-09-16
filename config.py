@@ -17,6 +17,7 @@ if os.path.exists(env_path):
                     os.environ.setdefault(k.strip(), v.strip())
 
 class Config:
+    BASE_DIR = BASE_DIR
     APP_URL = os.environ.get('APP_URL', 'http://127.0.0.1:5000')
     SECRET_KEY = os.environ.get('SECRET_KEY', 'webintern-secret-key-production-2026')
     JWT_SECRET_KEY = os.environ.get('JWT_SECRET_KEY', os.environ.get('JWT_SECRET', 'webintern-jwt-secret-key-super-secure'))

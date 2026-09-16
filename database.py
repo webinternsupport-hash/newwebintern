@@ -20,20 +20,32 @@ def get_db_connection():
     return conn
 
 def init_db():
+    try:
+        _init_db_tables()
+    except Exception as e:
+        log_error(f"Error initializing database: {e}")
+
+def _init_db_tables():
     conn = get_db_connection()
     cursor = conn.cursor()
     
-    # Try enabling WAL mode, fallback to DELETE mode if unsupported/serverless
-    try:
-        cursor.execute("PRAGMA journal_mode=WAL;")
-        mode = cursor.fetchone()[0]
-        log_info(f"SQLite journal mode set to: {mode}")
-    except Exception as e:
-        log_error(f"Failed to set WAL journal mode, falling back to DELETE mode: {e}")
+    # Try enabling WAL mode for local, DELETE mode for Vercel serverless
+    if getattr(Config, 'IS_VERCEL', False):
         try:
             cursor.execute("PRAGMA journal_mode=DELETE;")
         except Exception:
             pass
+    else:
+        try:
+            cursor.execute("PRAGMA journal_mode=WAL;")
+            mode = cursor.fetchone()[0]
+            log_info(f"SQLite journal mode set to: {mode}")
+        except Exception as e:
+            log_error(f"Failed to set WAL journal mode, falling back to DELETE mode: {e}")
+            try:
+                cursor.execute("PRAGMA journal_mode=DELETE;")
+            except Exception:
+                pass
 
     cursor.execute("PRAGMA foreign_keys = ON;")
 
@@ -343,3 +355,5 @@ def init_db():
     conn.commit()
     conn.close()
     log_success("Database initialized with 20 tables & indexes successfully.")
+
+
