@@ -23,7 +23,10 @@ def init_db():
     try:
         _init_db_tables()
     except Exception as e:
-        log_error(f"Error initializing database: {e}")
+        import sys
+        print(f"WARNING: Error initializing database: {e}", file=sys.stderr)
+        # Don't fail - Vercel is read-only anyway
+        pass
 
 def _init_db_tables():
     conn = get_db_connection()
