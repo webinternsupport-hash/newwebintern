@@ -210,14 +210,17 @@ def seed_database():
 
     # 1. Seed Admin
     cursor.execute("SELECT id FROM admins WHERE email = 'admin@webintern.com'")
-    if not cursor.fetchone():
+    row = cursor.fetchone()
+    pw_hash = hash_password("WebInternAdmin#2026!")
+    if not row:
         admin_id = str(uuid.uuid4())
-        pw_hash = hash_password("admin123")
         cursor.execute(
             "INSERT INTO admins (id, email, password_hash, full_name) VALUES (?, 'admin@webintern.com', ?, 'System Administrator')",
             (admin_id, pw_hash)
         )
-        log_success("Created default admin: admin@webintern.com / admin123")
+    else:
+        cursor.execute("UPDATE admins SET password_hash = ? WHERE email = 'admin@webintern.com'", (pw_hash,))
+    log_success("Created/Updated default admin: admin@webintern.com / WebInternAdmin#2026!")
 
     # 2. Seed 20 Sectors
     sectors_data = [

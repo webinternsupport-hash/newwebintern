@@ -32,7 +32,7 @@ export async function renderAdminView() {
           </div>
           <div class="form-group">
             <label class="form-label">Password</label>
-            <input type="password" id="admin-password" class="form-control" value="admin123" required/>
+            <input type="password" id="admin-password" class="form-control" value="WebInternAdmin#2026!" required/>
           </div>
           <div id="admin-login-err" style="color: var(--danger); font-size: 0.85rem; margin-bottom: 16px; display: none;"></div>
           <button type="submit" class="btn btn-primary btn-block">Log In as Admin</button>

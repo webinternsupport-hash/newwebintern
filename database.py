@@ -89,20 +89,27 @@ def _init_db_tables():
     );
     """)
 
-    # Seed default admin accounts if missing
+    # Seed default admin accounts if missing or update password
     try:
         from utils.auth import hash_password
         import uuid
         default_admins = [
-            ('admin@webintern.com', 'admin123', 'System Administrator'),
-            ('admin@webintern.in', 'admin123', 'WebIntern Admin')
+            ('admin@webintern.com', 'WebInternAdmin#2026!', 'System Administrator'),
+            ('admin@webintern.in', 'WebInternAdmin#2026!', 'WebIntern Admin')
         ]
         for admin_email, admin_pw, admin_name in default_admins:
             cursor.execute("SELECT id FROM admins WHERE LOWER(email) = ?", (admin_email,))
-            if not cursor.fetchone():
+            row = cursor.fetchone()
+            pw_h = hash_password(admin_pw)
+            if not row:
                 cursor.execute(
                     "INSERT INTO admins (id, email, password_hash, full_name) VALUES (?, ?, ?, ?)",
-                    (str(uuid.uuid4()), admin_email, hash_password(admin_pw), admin_name)
+                    (str(uuid.uuid4()), admin_email, pw_h, admin_name)
+                )
+            else:
+                cursor.execute(
+                    "UPDATE admins SET password_hash = ? WHERE id = ?",
+                    (pw_h, row['id'])
                 )
     except Exception as e:
         log_error(f"Failed to auto-seed admin accounts: {e}")
