@@ -16,7 +16,7 @@ application_bp = Blueprint('application_bp', __name__)
 @jwt_required
 def create_application():
     user_id = g.user_id
-    user_email = g.user_email
+    user_email = (g.user_email or '').lower().strip()
     data = request.get_json() or {}
     
     internship_id = data.get('internship_id')
@@ -26,13 +26,35 @@ def create_application():
     conn = get_db_connection()
     cursor = conn.cursor()
     
-    # Verify user profile exists
+    # Verify user profile exists by id or email
     cursor.execute("SELECT * FROM profiles WHERE id = ?", (user_id,))
     profile = cursor.fetchone()
+    if not profile and user_email:
+        cursor.execute("SELECT * FROM profiles WHERE LOWER(email) = ?", (user_email,))
+        profile = cursor.fetchone()
+
+    if not profile and (user_email or user_id):
+        from utils.supabase_client import fetch_profile_from_supabase
+        sp_prof = fetch_profile_from_supabase(user_email or user_id)
+        if sp_prof:
+            cursor.execute("""
+                INSERT OR REPLACE INTO profiles (id, full_name, email, phone, college, department, degree, auth_provider, created_at)
+                VALUES (?, ?, ?, ?, ?, ?, ?, 'email', CURRENT_TIMESTAMP)
+            """, (
+                sp_prof.get('id') or user_id, sp_prof.get('full_name', 'Student'),
+                sp_prof.get('email', user_email), sp_prof.get('phone'),
+                sp_prof.get('college'), sp_prof.get('department'), sp_prof.get('degree')
+            ))
+            conn.commit()
+            cursor.execute("SELECT * FROM profiles WHERE id = ?", (sp_prof.get('id') or user_id,))
+            profile = cursor.fetchone()
+
     if not profile:
         conn.close()
         return jsonify({'error': 'Student profile not found'}), 404
         
+    actual_user_id = profile['id']
+
     # Verify internship program exists
     cursor.execute("SELECT * FROM internships WHERE id = ?", (internship_id,))
     internship = cursor.fetchone()
@@ -43,8 +65,8 @@ def create_application():
     # Check for existing active application
     cursor.execute("""
         SELECT * FROM applications 
-        WHERE user_id = ? AND internship_id = ? AND status != 'cancelled'
-    """, (user_id, internship_id))
+        WHERE (user_id = ? OR LOWER(user_id) = ?) AND internship_id = ? AND status != 'cancelled'
+    """, (actual_user_id, profile['email'].lower(), internship_id))
     existing = cursor.fetchone()
     if existing:
         conn.close()
@@ -71,7 +93,7 @@ def create_application():
             id, user_id, internship_id, status, offer_letter_sent, start_date, end_date,
             offer_letter_id, certificate_id, completion_status, google_sync_status, applied_at
         ) VALUES (?, ?, ?, 'active', 1, ?, ?, ?, ?, 'pending', 'synced', CURRENT_TIMESTAMP)
-    """, (app_id, user_id, internship_id, start_date_str, end_date_str, offer_doc_num, cert_doc_num))
+    """, (app_id, actual_user_id, internship_id, start_date_str, end_date_str, offer_doc_num, cert_doc_num))
     
     # 2. Insert Certificate stub
     cert_id = str(uuid.uuid4())
@@ -94,7 +116,7 @@ def create_application():
         internship['title'], internship['slug'], start_date_str, end_date_str,
         internship['project_name'] or 'Enterprise Internship Capstone',
         internship['guide_name'] or 'Dr. A. K. Sharma (Technical Director)',
-        offer_doc_num, cert_doc_num, user_id, app_id
+        offer_doc_num, cert_doc_num, actual_user_id, app_id
     ))
     
     # 4. Generate Offer Letter PDF
@@ -114,10 +136,42 @@ def create_application():
         INSERT INTO documents (
             id, application_id, student_id, document_type, document_number, file_path, status, email_status
         ) VALUES (?, ?, ?, 'OFFER_LETTER', ?, ?, 'ISSUED', 'SENT')
-    """, (doc_id, app_id, user_id, offer_doc_num, pdf_path))
+    """, (doc_id, app_id, actual_user_id, offer_doc_num, pdf_path))
 
     conn.commit()
     
+    # Sync application, certificate, master internship, document to Supabase PostgREST
+    from utils.supabase_client import sync_application_to_supabase
+    sync_application_to_supabase(
+        app_data={
+            'id': app_id, 'user_id': actual_user_id, 'internship_id': internship_id,
+            'status': 'active', 'offer_letter_sent': True, 'start_date': start_date_str,
+            'end_date': end_date_str, 'offer_letter_id': offer_doc_num,
+            'certificate_id': cert_doc_num, 'completion_status': 'pending', 'google_sync_status': 'synced'
+        },
+        cert_data={
+            'id': cert_doc_num, 'application_id': app_id,
+            'certificate_url': f"/api/certificates/{cert_doc_num}/pdf", 'is_verified_paid': False
+        },
+        master_data={
+            'id': master_id, 'student_full_name': profile['full_name'], 'student_email': profile['email'],
+            'student_mobile': profile['phone'] or profile['mobile'] or '',
+            'college_name': profile['college'] or 'University Student',
+            'degree': profile['degree'] or 'Bachelor Degree', 'department': profile['department'] or 'General Track',
+            'internship_position': internship['title'], 'internship_domain': internship['slug'],
+            'internship_start_date': start_date_str, 'internship_end_date': end_date_str,
+            'project_title': internship['project_name'] or 'Enterprise Internship Capstone',
+            'mentor_name': internship['guide_name'] or 'Dr. A. K. Sharma (Technical Director)',
+            'offer_id': offer_doc_num, 'certificate_id': cert_doc_num,
+            'user_id': actual_user_id, 'application_id': app_id
+        },
+        doc_data={
+            'id': doc_id, 'application_id': app_id, 'student_id': actual_user_id,
+            'document_type': 'OFFER_LETTER', 'document_number': offer_doc_num,
+            'file_path': pdf_path, 'status': 'ISSUED', 'email_status': 'SENT'
+        }
+    )
+
     # Fetch final application object
     cursor.execute("""
         SELECT a.*, i.title as internship_title, i.slug as internship_slug, i.internship_emoji, i.duration_weeks
@@ -145,7 +199,7 @@ def create_application():
 @jwt_required
 def get_my_applications():
     user_id = g.user_id
-    user_email = g.user_email
+    user_email = (g.user_email or '').lower().strip()
     
     conn = get_db_connection()
     cursor = conn.cursor()
@@ -155,11 +209,41 @@ def get_my_applications():
         FROM applications a
         JOIN internships i ON a.internship_id = i.id
         LEFT JOIN certificates c ON a.id = c.application_id OR a.certificate_id = c.id
-        WHERE a.user_id = ? OR LOWER(a.user_id) = ?
+        WHERE a.user_id = ? OR LOWER(a.user_id) = ? OR a.user_id IN (SELECT id FROM profiles WHERE LOWER(email) = ?)
         ORDER BY a.applied_at DESC
-    """, (user_id, user_email))
+    """, (user_id, user_email, user_email))
     apps = [dict(r) for r in cursor.fetchall()]
     
+    # Fallback to Supabase if 0 local apps found
+    if not apps and user_email:
+        from utils.supabase_client import fetch_applications_from_supabase
+        sp_apps = fetch_applications_from_supabase(user_id, user_email)
+        if sp_apps:
+            for sa in sp_apps:
+                app_id = sa.get('id')
+                intern_id = sa.get('internship_id')
+                if app_id and intern_id:
+                    cursor.execute("""
+                        INSERT OR IGNORE INTO applications (id, user_id, internship_id, status, offer_letter_sent, start_date, end_date, offer_letter_id, certificate_id, completion_status, google_sync_status)
+                        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                    """, (
+                        app_id, user_id, intern_id, sa.get('status', 'active'),
+                        sa.get('offer_letter_sent', 1), sa.get('start_date'), sa.get('end_date'),
+                        sa.get('offer_letter_id'), sa.get('certificate_id'), sa.get('completion_status', 'pending'),
+                        sa.get('google_sync_status', 'synced')
+                    ))
+            conn.commit()
+            
+            cursor.execute("""
+                SELECT a.*, i.title as internship_title, i.slug as internship_slug, i.internship_emoji, i.duration_weeks, i.company_name, c.is_verified_paid
+                FROM applications a
+                JOIN internships i ON a.internship_id = i.id
+                LEFT JOIN certificates c ON a.id = c.application_id OR a.certificate_id = c.id
+                WHERE a.user_id = ? OR LOWER(a.user_id) = ? OR a.user_id IN (SELECT id FROM profiles WHERE LOWER(email) = ?)
+                ORDER BY a.applied_at DESC
+            """, (user_id, user_email, user_email))
+            apps = [dict(r) for r in cursor.fetchall()]
+
     for app in apps:
         # Fetch submissions for this app
         cursor.execute("SELECT * FROM submissions WHERE application_id = ? ORDER BY week_number ASC", (app['id'],))

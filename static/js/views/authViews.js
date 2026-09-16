@@ -59,6 +59,9 @@ export function renderLoginView() {
 
     try {
       await API.login({ email, password });
+      if (window.app && typeof window.app.checkAuthSession === 'function') {
+        await window.app.checkAuthSession();
+      }
       window.location.hash = '#/dashboard';
     } catch (err) {
       submitBtn.disabled = false;
@@ -80,6 +83,9 @@ export function renderLoginView() {
         google_account_id: `g_${Date.now()}`,
         full_name: mockEmail.split('@')[0]
       });
+      if (window.app && typeof window.app.checkAuthSession === 'function') {
+        await window.app.checkAuthSession();
+      }
       window.location.hash = '#/dashboard';
     } catch (err) {
       alert('Google Sign-In failed: ' + err.message);
@@ -176,6 +182,9 @@ export function renderRegisterView() {
       await API.register({
         full_name, email, phone, college, department, password, terms_accepted
       });
+      if (window.app && typeof window.app.checkAuthSession === 'function') {
+        await window.app.checkAuthSession();
+      }
       window.location.hash = '#/dashboard';
     } catch (err) {
       submitBtn.disabled = false;

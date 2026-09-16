@@ -172,6 +172,11 @@ def create_supabase_user(email, password, user_metadata=None):
             sync_profile_to_supabase(profile_data)
             
             return {'success': True, 'user': data}
+        elif resp.status_code == 422 or 'already registered' in resp.text.lower() or 'already exists' in resp.text.lower():
+            sp_prof = fetch_profile_from_supabase(email)
+            if sp_prof:
+                return {'success': True, 'user': sp_prof, 'existing': True}
+            return {'success': False, 'error': 'User already registered in Supabase', 'status_code': 400}
         else:
             log_error(f"Failed to create Supabase account ({resp.status_code}): {resp.text}")
             return {'success': False, 'error': resp.text, 'status_code': resp.status_code}
@@ -269,5 +274,145 @@ def sync_all_profiles_to_supabase():
             count += 1
     log_success(f"Synced {count}/{len(rows)} student profiles from SQLite to Supabase public.profiles")
     return count
+
+def fetch_profile_from_supabase(identifier):
+    """
+    Fetches a profile from Supabase public.profiles by user ID or email.
+    """
+    url = Config.SUPABASE_URL
+    service_key = Config.SUPABASE_SERVICE_ROLE_KEY or Config.SUPABASE_ANON_KEY
+    if not url or not service_key or not identifier:
+        return None
+
+    headers = {
+        'apikey': service_key,
+        'Authorization': f"Bearer {service_key}"
+    }
+
+    try:
+        # Search by id or email
+        clean_id = str(identifier).strip()
+        resp = requests.get(
+            f"{url}/rest/v1/profiles?or=(id.eq.{clean_id},email.eq.{clean_id.lower()})",
+            headers=headers,
+            timeout=8
+        )
+        if resp.status_code == 200:
+            data = resp.json()
+            if data and len(data) > 0:
+                log_success(f"Fetched profile for {identifier} from Supabase")
+                return data[0]
+    except Exception as e:
+        log_error(f"Error fetching profile for {identifier} from Supabase: {e}")
+    return None
+
+def sync_application_to_supabase(app_data, cert_data=None, master_data=None, doc_data=None):
+    """
+    Upserts application, certificate, master internship, and document records into Supabase PostgREST tables.
+    """
+    url = Config.SUPABASE_URL
+    service_key = Config.SUPABASE_SERVICE_ROLE_KEY or Config.SUPABASE_ANON_KEY
+    if not url or not service_key:
+        return False
+
+    headers = {
+        'apikey': service_key,
+        'Authorization': f"Bearer {service_key}",
+        'Content-Type': 'application/json',
+        'Prefer': 'resolution=merge-duplicates'
+    }
+
+    success = True
+    try:
+        # Ensure student profile exists in Supabase public.profiles first to satisfy foreign key
+        if app_data and app_data.get('user_id'):
+            uid = app_data['user_id']
+            sp_p = fetch_profile_from_supabase(uid)
+            if not sp_p:
+                from database import get_db_connection
+                conn = get_db_connection()
+                cursor = conn.cursor()
+                cursor.execute("SELECT * FROM profiles WHERE id = ?", (uid,))
+                local_p = cursor.fetchone()
+                conn.close()
+                if local_p:
+                    sync_profile_to_supabase(dict(local_p))
+
+        if app_data:
+            resp = requests.post(f"{url}/rest/v1/applications", json=[app_data], headers=headers, timeout=10)
+            if resp.status_code not in (200, 201, 204):
+                log_error(f"Failed to sync application to Supabase: {resp.status_code} {resp.text[:100]}")
+                success = False
+
+        if cert_data:
+            resp = requests.post(f"{url}/rest/v1/certificates", json=[cert_data], headers=headers, timeout=10)
+            if resp.status_code not in (200, 201, 204):
+                log_error(f"Failed to sync certificate to Supabase: {resp.status_code} {resp.text[:100]}")
+
+        if master_data:
+            resp = requests.post(f"{url}/rest/v1/master_internships", json=[master_data], headers=headers, timeout=10)
+            if resp.status_code not in (200, 201, 204):
+                log_error(f"Failed to sync master_internship to Supabase: {resp.status_code} {resp.text[:100]}")
+
+        if doc_data:
+            resp = requests.post(f"{url}/rest/v1/documents", json=[doc_data], headers=headers, timeout=10)
+            if resp.status_code not in (200, 201, 204):
+                log_error(f"Failed to sync document to Supabase: {resp.status_code} {resp.text[:100]}")
+
+        if success:
+            log_success(f"Synced application {app_data.get('id')} to Supabase")
+        return success
+    except Exception as e:
+        log_error(f"Exception syncing application to Supabase: {e}")
+        return False
+
+def fetch_applications_from_supabase(user_id, email):
+    """
+    Fetches applications from Supabase PostgREST for a given user_id or email.
+    """
+    url = Config.SUPABASE_URL
+    service_key = Config.SUPABASE_SERVICE_ROLE_KEY or Config.SUPABASE_ANON_KEY
+    if not url or not service_key:
+        return []
+
+    headers = {
+        'apikey': service_key,
+        'Authorization': f"Bearer {service_key}"
+    }
+
+    apps = []
+    try:
+        clean_user_id = str(user_id).strip()
+        resp = requests.get(
+            f"{url}/rest/v1/applications?user_id=eq.{clean_user_id}&select=*",
+            headers=headers,
+            timeout=8
+        )
+        if resp.status_code == 200:
+            apps = resp.json()
+
+        if not apps and email:
+            # Try matching via master_internships email
+            resp2 = requests.get(
+                f"{url}/rest/v1/master_internships?student_email=eq.{email.lower()}&select=application_id",
+                headers=headers,
+                timeout=8
+            )
+            if resp2.status_code == 200 and resp2.json():
+                app_ids = [m['application_id'] for m in resp2.json() if m.get('application_id')]
+                if app_ids:
+                    id_list = ",".join(app_ids)
+                    resp3 = requests.get(
+                        f"{url}/rest/v1/applications?id=in.({id_list})&select=*",
+                        headers=headers,
+                        timeout=8
+                    )
+                    if resp3.status_code == 200:
+                        apps = resp3.json()
+    except Exception as e:
+        log_error(f"Exception fetching applications from Supabase: {e}")
+
+    return apps
+
 
 

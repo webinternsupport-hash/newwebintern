@@ -15,6 +15,9 @@ def get_db_connection():
                 shutil.copy2(source_db, db_path)
             except Exception as e:
                 pass
+    db_dir = os.path.dirname(db_path)
+    if db_dir:
+        os.makedirs(db_dir, exist_ok=True)
     conn = sqlite3.connect(db_path, timeout=20.0)
     conn.row_factory = sqlite3.Row
     return conn

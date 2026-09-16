@@ -32,16 +32,13 @@ def create_app():
         import traceback
         traceback.print_exc(file=sys.stderr)
     
-    # Skip database initialization in Vercel (read-only filesystem)
-    if not getattr(Config, 'IS_VERCEL', False):
-        try:
-            init_db()
-        except Exception as e:
-            print(f"WARNING: init_db() failed: {e}", file=sys.stderr)
-            import traceback
-            traceback.print_exc(file=sys.stderr)
-    else:
-        print("INFO: Skipping init_db() in Vercel environment (read-only filesystem)", file=sys.stderr)
+    # Initialize database tables
+    try:
+        init_db()
+    except Exception as e:
+        print(f"WARNING: init_db() failed: {e}", file=sys.stderr)
+        import traceback
+        traceback.print_exc(file=sys.stderr)
     
     # Register Blueprints with error handling
     blueprints = [
