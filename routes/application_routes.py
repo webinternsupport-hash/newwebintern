@@ -140,9 +140,9 @@ def create_application():
 
     conn.commit()
     
-    # Sync application, certificate, master internship, document to Supabase PostgREST
-    from utils.supabase_client import sync_application_to_supabase
-    sync_application_to_supabase(
+    # Sync application, certificate, master internship, document to Supabase PostgREST in non-blocking background thread
+    from utils.supabase_client import sync_application_to_supabase_async
+    sync_application_to_supabase_async(
         app_data={
             'id': app_id, 'user_id': actual_user_id, 'internship_id': internship_id,
             'status': 'active', 'offer_letter_sent': True, 'start_date': start_date_str,

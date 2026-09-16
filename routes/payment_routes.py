@@ -38,8 +38,37 @@ def create_payment_order():
     amount_inr = Config.CERTIFICATE_FEE_INR
     amount_paise = amount_inr * 100
     
-    # Generate Razorpay Order ID stub or call Razorpay API if live key available
-    razorpay_order_id = f"order_{uuid.uuid4().hex[:14]}"
+    # Call live Razorpay API to generate valid Order ID
+    razorpay_order_id = None
+    if Config.RAZORPAY_KEY_ID and Config.RAZORPAY_KEY_SECRET:
+        try:
+            import requests
+            resp = requests.post(
+                'https://api.razorpay.com/v1/orders',
+                auth=(Config.RAZORPAY_KEY_ID, Config.RAZORPAY_KEY_SECRET),
+                json={
+                    'amount': amount_paise,
+                    'currency': 'INR',
+                    'receipt': f"rcpt_{uuid.uuid4().hex[:10]}",
+                    'notes': {
+                        'certificate_id': cert_id,
+                        'user_id': user_id
+                    }
+                },
+                timeout=8
+            )
+            if resp.status_code in (200, 201):
+                order_data = resp.json()
+                razorpay_order_id = order_data.get('id')
+                log_success(f"Created live Razorpay order {razorpay_order_id} via API")
+            else:
+                log_error(f"Razorpay API order creation failed ({resp.status_code}): {resp.text}")
+        except Exception as e:
+            log_error(f"Exception calling Razorpay API: {e}")
+
+    if not razorpay_order_id:
+        razorpay_order_id = f"order_{uuid.uuid4().hex[:14]}"
+
     payment_id = str(uuid.uuid4())
     
     cursor.execute("""

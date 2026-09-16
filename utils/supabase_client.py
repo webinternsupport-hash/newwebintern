@@ -366,6 +366,18 @@ def sync_application_to_supabase(app_data, cert_data=None, master_data=None, doc
         log_error(f"Exception syncing application to Supabase: {e}")
         return False
 
+def sync_application_to_supabase_async(app_data, cert_data=None, master_data=None, doc_data=None):
+    """
+    Triggers non-blocking background thread for Supabase application sync.
+    """
+    import threading
+    t = threading.Thread(
+        target=sync_application_to_supabase,
+        args=(app_data, cert_data, master_data, doc_data)
+    )
+    t.daemon = True
+    t.start()
+
 def fetch_applications_from_supabase(user_id, email):
     """
     Fetches applications from Supabase PostgREST for a given user_id or email.
