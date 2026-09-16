@@ -118,8 +118,8 @@ def create_app():
         
     return app
 
-app = create_app()
-
+# Only run the development server if this is the main module (local development)
 if __name__ == '__main__':
+    app = create_app()
     log_success("Starting Web Intern Platform server on http://127.0.0.1:5000")
     app.run(host='0.0.0.0', port=5000, debug=True)

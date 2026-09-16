@@ -7,13 +7,15 @@ if root_dir not in sys.path:
     sys.path.insert(0, root_dir)
 
 try:
-    from app import app
+    from app import create_app
+    app = create_app()
 except Exception as e:
-    print(f"Error importing app: {e}")
+    print(f"Error importing and creating app: {e}")
     import traceback
     traceback.print_exc()
     raise
 
 # Export app for Vercel Serverless Function WSGI runner
 __all__ = ['app']
+
 
