@@ -8,6 +8,7 @@ if root_dir not in sys.path:
 
 try:
     from app import create_app
+    # Create and export app at module level for Vercel to detect
     app = create_app()
 except Exception as e:
     print(f"Error importing and creating app: {e}")

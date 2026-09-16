@@ -2,7 +2,7 @@ import unittest
 import os
 import io
 import json
-from app import app
+from app import create_app
 from database import init_db
 from seed import seed_database
 
@@ -10,6 +10,7 @@ class WebInternTestCase(unittest.TestCase):
     @classmethod
     def setUpClass(cls):
         seed_database()
+        app = create_app()
         cls.client = app.test_client()
 
     def test_01_sectors_and_internships(self):
