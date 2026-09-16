@@ -1,4 +1,10 @@
 {
+  "projectSettings": {
+    "pythonVersion": "3.12"
+  },
+  "env": {
+    "PYTHONUNBUFFERED": "1"
+  },
   "rewrites": [
     {
       "source": "/(.*)",

@@ -1,0 +1,13 @@
+# Exclude test files
+*test*.py
+tests/
+__pycache__/
+*.pyc
+.git/
+.gitignore
+README.md
+.env.local
+.env.*.local
+*.log
+.DS_Store
+node_modules/
