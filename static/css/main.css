@@ -1,93 +1,172 @@
-/* Web Intern Design System Tokens */
-@import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800;900&display=swap');
+/* ==========================================================================
+   WEB INTERN PLATFORM - MAIN CSS (BASE & LAYOUT)
+   ========================================================================== */
 
 :root {
-  --color-primary-blue: #0B3D91;
-  --color-blue-dark: #082B66;
-  --color-accent-blue: #2E7DFF;
-  --color-blue-light: #EAF1FB;
-  --color-white: #FFFFFF;
-  --color-gray-text: #4B5563;
-  --color-gray-bg: #F8F9FA;
-  --color-border: #DCE6F5;
+  --primary: #2563eb;
+  --primary-hover: #1d4ed8;
+  --primary-light: #eff6ff;
+  --secondary: #0f172a;
+  --accent: #d97706;
+  --accent-light: #fef3c7;
+  --success: #16a34a;
+  --success-light: #f0fdf4;
+  --warning: #ca8a04;
+  --warning-light: #fefce8;
+  --danger: #dc2626;
+  --danger-light: #fef2f2;
   
-  /* Tint Accents for Stats Cards */
-  --tint-peach-bg: #FFF4EC;
-  --tint-peach-icon: #FF7043;
-  --tint-yellow-bg: #FEF9E7;
-  --tint-yellow-icon: #F59E0B;
-
-  --font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
-  --radius-sm: 8px;
-  --radius-md: 12px;
+  --bg-main: #f8fafc;
+  --bg-card: #ffffff;
+  --border-color: #e2e8f0;
+  --text-main: #0f172a;
+  --text-muted: #64748b;
+  --text-light: #94a3b8;
+  
+  --radius-sm: 6px;
+  --radius-md: 10px;
   --radius-lg: 16px;
   --radius-full: 9999px;
   
-  --shadow-sm: 0 2px 4px rgba(11, 61, 145, 0.04);
-  --shadow-md: 0 4px 12px rgba(11, 61, 145, 0.08);
-  --shadow-lg: 0 10px 25px rgba(11, 61, 145, 0.12);
-  --shadow-xl: 0 20px 40px rgba(11, 61, 145, 0.16);
-
-  --transition-fast: 0.15s ease;
-  --transition-normal: 0.25s ease;
-  --transition-slow: 0.4s cubic-bezier(0.16, 1, 0.3, 1);
+  --shadow-sm: 0 1px 2px 0 rgb(0 0 0 / 0.05);
+  --shadow-md: 0 4px 6px -1px rgb(0 0 0 / 0.1), 0 2px 4px -2px rgb(0 0 0 / 0.1);
+  --shadow-lg: 0 10px 15px -3px rgb(0 0 0 / 0.1), 0 4px 6px -4px rgb(0 0 0 / 0.1);
+  
+  --font-family: system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, Cantarell, 'Open Sans', 'Helvetica Neue', sans-serif;
+  --header-height: 64px;
+  --bottom-bar-height: 60px;
 }
 
-*, *::before, *::after {
+* {
   box-sizing: border-box;
   margin: 0;
   padding: 0;
 }
 
-html {
-  scroll-behavior: smooth;
-  font-size: 16px;
-}
-
 body {
   font-family: var(--font-family);
-  background-color: var(--color-gray-bg);
-  color: var(--color-gray-text);
+  background-color: var(--bg-main);
+  color: var(--text-main);
   line-height: 1.5;
   -webkit-font-smoothing: antialiased;
-  -moz-osx-font-smoothing: grayscale;
-  overflow-x: hidden;
+  padding-bottom: var(--bottom-bar-height);
+}
+
+@media (min-width: 769px) {
+  body {
+    padding-bottom: 0;
+  }
 }
 
 a {
-  color: var(--color-accent-blue);
+  color: var(--primary);
   text-decoration: none;
-  transition: color var(--transition-fast);
 }
 
 a:hover {
-  color: var(--color-primary-blue);
-}
-
-h1, h2, h3, h4, h5, h6 {
-  color: var(--color-blue-dark);
-  font-weight: 700;
-  line-height: 1.25;
-}
-
-img, svg {
-  max-width: 100%;
-  display: block;
+  text-decoration: underline;
 }
 
 .container {
   width: 100%;
-  max-width: 1240px;
+  max-width: 1200px;
   margin: 0 auto;
-  padding: 0 20px;
+  padding: 0 16px;
 }
 
-.section-padding {
-  padding: 64px 0;
+/* Sticky Header */
+.main-header {
+  position: sticky;
+  top: 0;
+  z-index: 100;
+  background-color: rgba(255, 255, 255, 0.95);
+  backdrop-filter: blur(8px);
+  border-bottom: 1px solid var(--border-color);
+  height: var(--header-height);
+  display: flex;
+  align-items: center;
 }
 
-@media (max-width: 768px) {
-  .section-padding {
-    padding: 40px 0;
+.header-container {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  width: 100%;
+}
+
+.brand-logo {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  font-size: 1.25rem;
+  font-weight: 800;
+  color: var(--secondary);
+  text-decoration: none !important;
+}
+
+.brand-logo span.highlight {
+  color: var(--primary);
+}
+
+.brand-icon {
+  background: linear-gradient(135deg, var(--primary), #3b82f6);
+  color: white;
+  width: 36px;
+  height: 36px;
+  border-radius: var(--radius-md);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-weight: 900;
+  font-size: 1.1rem;
+}
+
+.desktop-nav {
+  display: none;
+  gap: 24px;
+  align-items: center;
+}
+
+@media (min-width: 769px) {
+  .desktop-nav {
+    display: flex;
   }
+}
+
+.nav-link {
+  color: var(--text-muted);
+  font-weight: 500;
+  font-size: 0.95rem;
+  transition: color 0.2s ease;
+}
+
+.nav-link:hover, .nav-link.active {
+  color: var(--primary);
+  text-decoration: none;
+}
+
+.header-actions {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.menu-toggle {
+  display: flex;
+  background: none;
+  border: none;
+  font-size: 1.5rem;
+  color: var(--text-main);
+  cursor: pointer;
+  padding: 4px;
+}
+
+@media (min-width: 769px) {
+  .menu-toggle {
+    display: none;
+  }
+}
+
+main#app {
+  min-height: calc(100vh - var(--header-height) - 100px);
 }

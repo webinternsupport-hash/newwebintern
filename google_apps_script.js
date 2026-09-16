@@ -1,143 +1,114 @@
 /**
- * WebIntern Google Apps Script Webhook Endpoint for Google Sheets Tracking
- * Paste this into Google Apps Script connected to your Google Spreadsheet.
- * Deploy as Web App -> Execute as: Me -> Who has access: Anyone.
+ * Web Intern Platform - Google Apps Script Webhook
+ * Auto-creates tabs: Registrations, Applications, Certificates, and All Events Log
  */
 
 function doPost(e) {
   try {
-    var contents = {};
-    if (e && e.postData && e.postData.contents) {
-      try {
-        contents = JSON.parse(e.postData.contents);
-      } catch (pErr) {
-        contents = e.parameter || {};
-      }
-    } else if (e && e.parameter) {
-      if (e.parameter.payload) {
-        try {
-          contents = JSON.parse(e.parameter.payload);
-        } catch(pErr2) {
-          contents = e.parameter;
-        }
-      } else {
-        contents = e.parameter;
-      }
-    }
-
+    var data = JSON.parse(e.postData.contents);
+    var eventType = data.event || "UNKNOWN";
+    var payload = data.data || {};
     var ss = SpreadsheetApp.getActiveSpreadsheet();
-    var docType = contents.type || contents.documentType;
 
-    if (docType === "USER_REGISTRATION" || docType === "USER_LOGIN") {
-      var sheet = ss.getSheetByName("Student Logins & Signups") || ss.insertSheet("Student Logins & Signups");
-      if (sheet.getLastRow() === 0) {
-        sheet.appendRow([
-          "Timestamp", "Event Type", "Student ID", "Student Name", "Student Email", 
-          "Mobile", "College Name", "Department", "Degree", "Auth Provider"
-        ]);
-      }
-      sheet.appendRow([
-        contents.timestamp || new Date().toISOString(),
-        docType,
-        contents.studentId || contents.student_id || "",
-        contents.studentName || contents.student_name || "",
-        contents.email || contents.student_email || "",
-        contents.mobile || contents.phone || contents.student_mobile || "",
-        contents.collegeName || contents.college || "",
-        contents.department || "",
-        contents.degree || "",
-        contents.authProvider || "email"
-      ]);
-    } else if (docType === "OFFER_LETTER") {
-      var sheet = ss.getSheetByName("Offer Letters") || ss.insertSheet("Offer Letters");
-      if (sheet.getLastRow() === 0) {
-        sheet.appendRow([
-          "Timestamp", "Offer ID", "Student ID", "Student Name", "Student Email", 
-          "Mobile", "College Name", "Department", "Degree", "Course/Internship", "Internship Role", 
-          "Company", "Start Date", "End Date", "Duration", "Location", "Mentor Name", 
-          "Issue Date", "Document Status", "Email Status", "Email Message ID"
-        ]);
-      }
-      sheet.appendRow([
-        new Date().toISOString(),
-        contents.offerId || contents.offer_id || "",
-        contents.studentId || contents.student_id || "",
-        contents.studentName || contents.student_name || "",
-        contents.email || contents.student_email || "",
-        contents.mobile || contents.phone || contents.student_mobile || "",
-        contents.collegeName || contents.college || "",
-        contents.department || "",
-        contents.degree || "",
-        contents.course || contents.course_name || "",
-        contents.internshipRole || contents.role || "",
-        contents.company || "Web Intern Platform",
-        contents.startDate || contents.start_date || "",
-        contents.endDate || contents.end_date || "",
-        contents.duration || "4 Weeks",
-        contents.location || "Virtual / Remote",
-        contents.mentorName || contents.guideName || contents.mentor || "",
-        contents.issueDate || contents.issue_date || "",
-        contents.documentStatus || "ISSUED",
-        contents.emailStatus || "SENT",
-        contents.emailMessageId || ""
-      ]);
-    } else if (docType === "CERTIFICATE") {
-      var sheet = ss.getSheetByName("Certificates") || ss.insertSheet("Certificates");
-      if (sheet.getLastRow() === 0) {
-        sheet.appendRow([
-          "Timestamp", "Certificate ID", "Student ID", "Student Name", "Student Email", 
-          "Mobile", "College Name", "Department", "Degree", "Course/Internship", "Internship Role", 
-          "Company", "Start Date", "End Date", "Duration", "Guide Name", "Project Name", 
-          "Certificate Date", "Issue Date", "Document Status", "Email Status", 
-          "Email Message ID", "Verification URL"
-        ]);
-      }
-      sheet.appendRow([
-        new Date().toISOString(),
-        contents.certificateId || contents.certificate_id || "",
-        contents.studentId || contents.student_id || "",
-        contents.studentName || contents.student_name || "",
-        contents.email || contents.student_email || "",
-        contents.mobile || contents.phone || contents.student_mobile || "",
-        contents.collegeName || contents.college || "",
-        contents.department || "",
-        contents.degree || "",
-        contents.course || contents.course_name || "",
-        contents.internshipRole || contents.role || "",
-        contents.company || "Web Intern Platform",
-        contents.startDate || contents.start_date || "",
-        contents.endDate || contents.end_date || "",
-        contents.duration || "4 Weeks",
-        contents.guideName || contents.guide || "",
-        contents.projectName || contents.project || "",
-        contents.certificateDate || contents.issue_date || "",
-        contents.issueDate || contents.issue_date || "",
-        contents.documentStatus || "ISSUED",
-        contents.emailStatus || "SENT",
-        contents.emailMessageId || "",
-        contents.verificationUrl || ""
-      ]);
+    // 1. Always log raw event to "All Events Log"
+    logEvent(ss, eventType, payload);
+
+    // 2. Dispatch to specific sheet tab based on event type
+    if (eventType === "REGISTER") {
+      handleRegistration(ss, payload);
+    } else if (eventType === "APPLICATION") {
+      handleApplication(ss, payload);
+    } else if (eventType === "CERTIFICATE") {
+      handleCertificate(ss, payload);
     }
 
-    return ContentService.createTextOutput(JSON.stringify({ status: "success" }))
-      .setMimeType(ContentService.MimeType.JSON);
-  } catch (err) {
-    return ContentService.createTextOutput(JSON.stringify({ status: "error", message: err.toString() }))
-      .setMimeType(ContentService.MimeType.JSON);
+    return ContentService.createTextOutput(JSON.stringify({
+      status: "success",
+      event: eventType,
+      message: "Event logged successfully to Google Sheets"
+    })).setMimeType(ContentService.MimeType.JSON);
+
+  } catch (error) {
+    return ContentService.createTextOutput(JSON.stringify({
+      status: "error",
+      message: error.toString()
+    })).setMimeType(ContentService.MimeType.JSON);
   }
 }
 
 function doGet(e) {
-  try {
-    if (e) {
-      return doPost(e);
+  return ContentService.createTextOutput(JSON.stringify({
+    status: "online",
+    service: "Web Intern Google Sheets Webhook"
+  })).setMimeType(ContentService.MimeType.JSON);
+}
+
+function handleRegistration(ss, d) {
+  var sheet = getOrCreateSheet(ss, "Registrations", [
+    "Timestamp", "User ID", "Full Name", "Email", "Phone", "College", "Department", "Degree"
+  ]);
+  sheet.appendRow([
+    new Date(),
+    d.user_id || d.id || "",
+    d.full_name || "",
+    d.email || "",
+    d.phone || "",
+    d.college || "",
+    d.department || "",
+    d.degree || ""
+  ]);
+}
+
+function handleApplication(ss, d) {
+  var sheet = getOrCreateSheet(ss, "Applications", [
+    "Timestamp", "Application ID", "Student Name", "Email", "Internship Title", "Offer Letter ID", "Start Date", "End Date", "Status"
+  ]);
+  sheet.appendRow([
+    new Date(),
+    d.application_id || d.id || "",
+    d.student_name || d.full_name || "",
+    d.email || "",
+    d.internship_title || "",
+    d.offer_letter_id || "",
+    d.start_date || "",
+    d.end_date || "",
+    d.status || "active"
+  ]);
+}
+
+function handleCertificate(ss, d) {
+  var sheet = getOrCreateSheet(ss, "Certificates", [
+    "Timestamp", "Certificate ID", "Student Name", "Email", "Internship Title", "Offer Letter ID", "Payment Status", "Certificate URL", "Issued At"
+  ]);
+  sheet.appendRow([
+    new Date(),
+    d.certificate_id || d.id || "",
+    d.student_name || "",
+    d.email || "",
+    d.internship_title || "",
+    d.offer_letter_id || "",
+    d.is_verified_paid ? "VERIFIED & PAID" : "PENDING",
+    d.certificate_url || "",
+    d.issued_at || new Date()
+  ]);
+}
+
+function logEvent(ss, eventType, payload) {
+  var sheet = getOrCreateSheet(ss, "All Events Log", ["Timestamp", "Event Type", "Payload JSON"]);
+  sheet.appendRow([new Date(), eventType, JSON.stringify(payload)]);
+}
+
+function getOrCreateSheet(ss, name, headers) {
+  var sheet = ss.getSheetByName(name);
+  if (!sheet) {
+    sheet = ss.insertSheet(name);
+    if (headers && headers.length > 0) {
+      sheet.appendRow(headers);
+      var range = sheet.getRange(1, 1, 1, headers.length);
+      range.setFontWeight("bold");
+      range.setBackground("#1e293b");
+      range.setFontColor("#ffffff");
     }
-    return ContentService.createTextOutput(JSON.stringify({ 
-      status: "online", 
-      message: "WebIntern Google Sheets Webhook is active and tracking all fields including Mobile Phone Numbers!" 
-    })).setMimeType(ContentService.MimeType.JSON);
-  } catch (err) {
-    return ContentService.createTextOutput(JSON.stringify({ status: "error", message: err.toString() }))
-      .setMimeType(ContentService.MimeType.JSON);
   }
+  return sheet;
 }

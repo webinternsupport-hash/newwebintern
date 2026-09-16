@@ -3,171 +3,101 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Web Intern — Virtual Internship Platform</title>
-  <meta name="description" content="Browse virtual internships by sector, apply instantly, receive official offer letters, complete weekly project tasks, and earn verified certificates.">
-
-  <!-- Google Fonts Inter -->
-  <link rel="preconnect" href="https://fonts.googleapis.com">
-  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800;900&display=swap" rel="stylesheet">
-
-  <!-- Stylesheets -->
-  <link rel="stylesheet" href="/css/main.css">
-  <link rel="stylesheet" href="/css/components.css">
-  <link rel="stylesheet" href="/css/utilities.css">
-
-  <!-- Supabase JS Client -->
-  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
-
-  <!-- Feather Icons CDN -->
-  <script src="https://unpkg.com/feather-icons"></script>
-
+  <title>Web Intern - Virtual Internship & Certification Platform</title>
+  <link rel="stylesheet" href="/static/css/main.css">
+  <link rel="stylesheet" href="/static/css/components.css">
+  <link rel="stylesheet" href="/static/css/mobile-app.css">
   <!-- Razorpay Checkout SDK -->
   <script src="https://checkout.razorpay.com/v1/checkout.js"></script>
-
-  <!-- Google Identity Services (GSI) Client -->
-  <script src="https://accounts.google.com/gsi/client" async defer></script>
 </head>
 <body>
 
-  <!-- Sticky Application Header -->
-  <header class="header" id="app-header">
+  <!-- Sticky Top Header -->
+  <header class="main-header">
     <div class="container header-container">
-      <a href="#/" class="header-logo">
-        <img src="/assets/logo.svg" alt="Web Intern Logo" height="40" />
+      <a href="#/" class="brand-logo">
+        <div class="brand-icon">WI</div>
+        <span>Web<span class="highlight">Intern</span></span>
       </a>
 
-      <ul class="nav-links" id="desktop-nav-links">
-        <li><a href="#/" class="nav-link">Home</a></li>
-        <li><a href="#/internships" class="nav-link">Explore Internships</a></li>
-        <li><a href="#/sectors" class="nav-link">Sectors</a></li>
-        <li><a href="#/about-us" class="nav-link">About Us</a></li>
-        <li><a href="#/contact-us" class="nav-link">Contact</a></li>
-      </ul>
+      <nav class="desktop-nav">
+        <a href="#/" class="nav-link">Home</a>
+        <a href="#/explore" class="nav-link">Explore Internships</a>
+        <a href="#/sectors" class="nav-link">Sectors</a>
+        <a href="#/dashboard" class="nav-link">Student Portal</a>
+        <a href="#/admin" class="nav-link">Admin Portal</a>
+      </nav>
 
-      <div class="header-actions" id="header-auth-actions">
-        <!-- Injected dynamically based on auth state -->
-        <a href="#/login" class="btn btn-outline btn-sm">Sign In</a>
-        <a href="#/register" class="btn btn-primary btn-sm">Get Started</a>
+      <div class="header-actions">
+        <a href="#/login" class="btn btn-outline btn-sm" id="auth-header-btn">Sign In</a>
+        <button class="btn btn-outline btn-sm" id="header-logout-btn" style="display: none; margin-left: 8px; color: var(--danger, #ef4444); border-color: var(--danger, #ef4444); font-weight: 600;">🚪 Log Out</button>
+        <button class="menu-toggle" id="drawer-toggle-btn" aria-label="Toggle Navigation">☰</button>
       </div>
-
-      <button class="hamburger-btn" id="hamburger-toggle-btn" aria-label="Toggle Navigation Menu">
-        <i data-feather="menu" id="hamburger-icon"></i>
-      </button>
     </div>
   </header>
 
-  <!-- Mobile Navigation Drawer (Section 5A) -->
-  <nav class="mobile-nav-panel" id="mobile-nav-panel" aria-hidden="true">
-    <div class="mobile-search-bar">
-      <i data-feather="search" style="color: var(--color-gray-text); width: 18px; height: 18px;"></i>
-      <input type="text" id="mobile-search-input" class="mobile-search-input" placeholder="Search for Internships..." />
-    </div>
-
-    <ul class="mobile-links-list">
-      <li><a href="#/" class="mobile-link">Home</a></li>
-      <li>
-        <a href="#/internships" class="mobile-link">
-          Explore Internships
-          <i data-feather="chevron-right" style="width: 18px;"></i>
-        </a>
-      </li>
-      <li><a href="#/sectors" class="mobile-link">All Sectors</a></li>
-      <li><a href="#/about-us" class="mobile-link">About Us</a></li>
-      <li><a href="#/contact-us" class="mobile-link">Contact Us</a></li>
-    </ul>
-
-    <div class="mobile-actions" id="mobile-auth-actions">
-      <a href="#/register" class="btn btn-primary btn-full">
-        <i data-feather="user-plus" style="width: 18px; height: 18px;"></i>
-        Get Started
+  <!-- Mobile Slide Drawer -->
+  <div class="mobile-drawer-backdrop" id="drawer-backdrop"></div>
+  <aside class="mobile-drawer" id="mobile-drawer">
+    <div class="drawer-header">
+      <a href="#/" class="brand-logo">
+        <div class="brand-icon">WI</div>
+        <span>Web<span class="highlight">Intern</span></span>
       </a>
-      <a href="#/login" class="btn btn-outline btn-full">
-        <i data-feather="log-in" style="width: 18px; height: 18px;"></i>
-        Log In
-      </a>
+      <button class="close-modal" id="drawer-close-btn">&times;</button>
     </div>
+    <div class="drawer-links">
+      <a href="#/" class="drawer-link">🏠 Home</a>
+      <a href="#/explore" class="drawer-link">🔍 Explore Internships</a>
+      <a href="#/sectors" class="drawer-link">📊 Sector Domains</a>
+      <a href="#/dashboard" class="drawer-link">💼 Student Dashboard</a>
+      <a href="#/admin" class="drawer-link">🛡️ Staff & Admin</a>
+      <hr style="border: 0; border-top: 1px solid var(--border-color); margin: 10px 0;"/>
+      <a href="#/login" class="drawer-link" id="drawer-login-link">🔑 Sign In / Register</a>
+      <button class="drawer-link" id="drawer-logout-btn" style="display: none; background: none; border: none; width: 100%; text-align: left; cursor: pointer; color: var(--danger, #ef4444); font-size: 1rem; padding: 12px 16px;">🚪 Log Out</button>
+    </div>
+  </aside>
+
+  <!-- Dynamic SPA View Container -->
+  <main id="app"></main>
+
+  <!-- Fixed Bottom App Bar for Mobile -->
+  <nav class="bottom-app-bar">
+    <a href="#/" class="app-bar-tab" id="bar-tab-home">
+      <span class="tab-icon">🏠</span>
+      <span>Home</span>
+    </a>
+    <a href="#/explore" class="app-bar-tab" id="bar-tab-explore">
+      <span class="tab-icon">🔍</span>
+      <span>Explore</span>
+    </a>
+    <a href="#/dashboard" class="app-bar-tab" id="bar-tab-profile">
+      <span class="tab-icon">💼</span>
+      <span>Dashboard</span>
+    </a>
+    <button class="app-bar-tab" id="bar-tab-more" style="background: none; border: none; cursor: pointer;">
+      <span class="tab-icon">☰</span>
+      <span>More</span>
+    </button>
   </nav>
 
-  <!-- Main View Router Container -->
-  <main id="app-view"></main>
-
-  <!-- Footer -->
-  <footer style="background-color: var(--color-blue-dark); color: var(--color-white); padding: 64px 0 32px 0;">
-    <div class="container">
-      <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); gap: 40px; margin-bottom: 48px;">
-        <div>
-          <img src="/assets/logo.svg" alt="Web Intern" height="40" style="filter: brightness(0) invert(1); margin-bottom: 16px;" />
-          <p style="color: #DCE6F5; font-size: 14px; line-height: 1.6; margin-bottom: 20px;">
-            Empowering students worldwide with practical sector-based virtual internships, real-world project task evaluations, and official verified certificates.
-          </p>
-          <div style="display: flex; gap: 12px;">
-            <a href="#" style="color: #DCE6F5;"><i data-feather="twitter"></i></a>
-            <a href="#" style="color: #DCE6F5;"><i data-feather="linkedin"></i></a>
-            <a href="#" style="color: #DCE6F5;"><i data-feather="github"></i></a>
-          </div>
-        </div>
-
-        <div>
-          <h4 style="color: var(--color-white); font-size: 16px; margin-bottom: 20px;">Internship Sectors</h4>
-          <ul style="list-style: none; display: flex; flex-direction: column; gap: 10px; font-size: 14px;">
-            <li><a href="#/sector/engineering-technology" style="color: #DCE6F5;">Engineering & Technology</a></li>
-            <li><a href="#/sector/management-commerce" style="color: #DCE6F5;">Management & Commerce</a></li>
-            <li><a href="#/sector/science" style="color: #DCE6F5;">Science</a></li>
-            <li><a href="#/sector/medical-healthcare" style="color: #DCE6F5;">Medical & Healthcare</a></li>
-          </ul>
-        </div>
-
-        <div>
-          <h4 style="color: var(--color-white); font-size: 16px; margin-bottom: 20px;">Quick Links</h4>
-          <ul style="list-style: none; display: flex; flex-direction: column; gap: 10px; font-size: 14px;">
-            <li><a href="#/internships" style="color: #DCE6F5;">Explore Internships</a></li>
-            <li><a href="#/dashboard" style="color: #DCE6F5;">Student Dashboard</a></li>
-            <li><a href="#/about-us" style="color: #DCE6F5;">About Us</a></li>
-            <li><a href="#/admin" style="color: #DCE6F5;">Admin Portal</a></li>
-          </ul>
-        </div>
-
-        <div>
-          <h4 style="color: var(--color-white); font-size: 16px; margin-bottom: 20px;">Legal & Support</h4>
-          <ul style="list-style: none; display: flex; flex-direction: column; gap: 10px; font-size: 14px;">
-            <li><a href="#/privacy-policy" style="color: #DCE6F5;">Privacy Policy</a></li>
-            <li><a href="#/contact-us" style="color: #DCE6F5;">Contact Support</a></li>
-          </ul>
-        </div>
-      </div>
-
-      <div style="border-top: 1px solid rgba(220, 230, 245, 0.2); padding-top: 24px; text-align: center; font-size: 13px; color: #DCE6F5;">
-        © 2026 Web Intern Platform. All rights reserved.
-      </div>
+  <!-- Bottom Sheet Modal for 'More' Tab -->
+  <div class="bottom-sheet-backdrop" id="bottom-sheet-backdrop"></div>
+  <div class="bottom-sheet" id="bottom-sheet-modal">
+    <div class="bottom-sheet-handle"></div>
+    <h3 style="font-weight: 700; margin-bottom: 16px; text-align: center;">Quick Menu</h3>
+    <div style="display: flex; flex-direction: column; gap: 12px;">
+      <a href="#/sectors" class="btn btn-outline btn-block">📊 View 8 Sector Tracks</a>
+      <a href="#/admin" class="btn btn-outline btn-block">🛡️ Admin & Mentor Portal</a>
+      <a href="#/login" class="btn btn-primary btn-block" id="sheet-login-btn">Sign In / Register</a>
+      <button class="btn btn-outline btn-block" id="sheet-logout-btn" style="display: none; color: var(--danger, #ef4444); border-color: var(--danger, #ef4444); font-weight: 600;">🚪 Log Out</button>
     </div>
-  </footer>
-
-  <!-- Floating Scroll-to-Top Button -->
-  <button class="scroll-top-btn" id="scroll-top-btn" aria-label="Scroll to top">
-    <i data-feather="arrow-up"></i>
-  </button>
+  </div>
 
   <!-- Toast Notification Container -->
   <div class="toast-container" id="toast-container"></div>
 
-  <!-- Dynamic Modal Mounting Point -->
-  <div class="modal-overlay" id="global-modal-overlay">
-    <div class="modal-card" id="global-modal-content"></div>
-  </div>
-
-  <!-- Frontend JavaScript Modules -->
-  <script src="/js/api.js"></script>
-  <script src="/js/components/toast.js"></script>
-  <script src="/js/components/header.js"></script>
-  <script src="/js/components/modals.js"></script>
-  <script src="/js/views/homeView.js"></script>
-  <script src="/js/views/exploreView.js"></script>
-  <script src="/js/views/detailView.js"></script>
-  <script src="/js/views/dashboardView.js"></script>
-  <script src="/js/views/authViews.js"></script>
-  <script src="/js/views/adminView.js"></script>
-  <script src="/js/views/staticViews.js"></script>
-  <script src="/js/app.js"></script>
+  <!-- JS Module Entry Point -->
+  <script type="module" src="/static/js/app.js"></script>
 </body>
 </html>

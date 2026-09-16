@@ -1,46 +1,12 @@
-# Environment variables - NEVER commit
-.env
-.env.local
-.env.*.local
-.env.production.local
-
-# Python
 __pycache__/
-*.pyc
-*.pyo
-*.egg-info/
-dist/
-build/
-.Python
-venv/
-env/
-
-# Node
-node_modules/
-.npmrc
-
-# System
-.DS_Store
-.vscode/
-.idea/
-*.swp
-*.swo
-
-# Database
-*.db
-webintern.db
-
-# Storage - uploaded and generated files
-storage/assignments/*
-!storage/assignments/.gitkeep
-storage/generated/offers/*
-!storage/generated/offers/.gitkeep
-storage/generated/certificates/*
-!storage/generated/certificates/.gitkeep
-
-# Generated outputs
-*.png
-*.pdf
-scratch/
-test_*.py
+*.py[cod]
+*$py.class
+.env
+storage/temp_qrs/
+storage/offer_letters/*
+!storage/offer_letters/.gitkeep
+storage/certificates/*
+!storage/certificates/.gitkeep
+storage/submissions/*
+!storage/submissions/.gitkeep
 .dist/

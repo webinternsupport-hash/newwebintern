@@ -1,10 +1,16 @@
 import os
+import sys
+
+# Ensure UTF-8 stdout encoding for Windows console safe logging
+try:
+    if hasattr(sys.stdout, 'reconfigure'):
+        sys.stdout.reconfigure(encoding='utf-8')
+except Exception:
+    pass
+
 from flask import Flask, send_from_directory, jsonify, request
-from flask_cors import CORS
 from config import Config
 from database import init_db
-
-# Import blueprints
 from routes.auth_routes import auth_bp
 from routes.sector_routes import sector_bp
 from routes.internship_routes import internship_bp
@@ -13,129 +19,107 @@ from routes.submission_routes import submission_bp
 from routes.certificate_routes import certificate_bp
 from routes.payment_routes import payment_bp
 from routes.admin_routes import admin_bp
-from routes.public_routes import public_bp
-from routes.document_routes import document_bp
-from routes.master_record_routes import master_record_bp
+from utils.logger import log_info, log_success
 
 def create_app():
-    app = Flask(__name__, static_folder='static', static_url_path='')
+    app = Flask(__name__, static_folder='static', static_url_path='/static')
     app.config.from_object(Config)
-
-    # Enable CORS
-    CORS(app, supports_credentials=True)
-
-    # Initialize Database Schema & Seed Data (safe for serverless cold start)
-    with app.app_context():
-        try:
-            init_db()
-        except Exception as e:
-            print(f"[Vercel Startup Warning]: Database initialization skipped or deferred: {e}")
-
-    # Register API blueprints with error handling
-    blueprints = [
-        ('auth_bp', auth_bp),
-        ('sector_bp', sector_bp),
-        ('internship_bp', internship_bp),
-        ('application_bp', application_bp),
-        ('submission_bp', submission_bp),
-        ('certificate_bp', certificate_bp),
-        ('payment_bp', payment_bp),
-        ('admin_bp', admin_bp),
-        ('public_bp', public_bp),
-        ('document_bp', document_bp),
-        ('master_record_bp', master_record_bp),
-    ]
+    Config.init_app(app)
     
-    for name, bp in blueprints:
-        try:
-            app.register_blueprint(bp)
-        except Exception as e:
-            print(f"[ERROR] Failed to register blueprint {name}: {e}")
-
-    # Static file serving routes
-    @app.route('/templates/<path:path>')
-    def serve_templates(path):
-        templates_dir = Config.TEMPLATE_DIR
-        target = os.path.join(templates_dir, path)
-        if os.path.exists(target) and not os.path.isdir(target):
-            return send_from_directory(templates_dir, path)
-        return jsonify({'error': 'Template file not found'}), 404
-
-    @app.route('/public/<path:path>')
-    def serve_public(path):
-        public_dir = Config.PUBLIC_DIR
-        target = os.path.join(public_dir, path)
-        if os.path.exists(target) and not os.path.isdir(target):
-            return send_from_directory(public_dir, path)
-        return jsonify({'error': 'Public file not found'}), 404
-
-    @app.route('/storage/<path:path>')
-    def serve_storage(path):
-        storage_dir = Config.STORAGE_DIR
-        target = os.path.join(storage_dir, path)
-        if os.path.exists(target) and not os.path.isdir(target):
-            return send_from_directory(storage_dir, path)
-        return jsonify({'error': 'Storage file not found'}), 404
-
-    @app.route('/api/templates', methods=['GET'])
-    def get_template_config():
-        templates = {}
-        for key, info in Config.DOCUMENT_TEMPLATES.items():
-            exists = os.path.exists(info['path'])
-            templates[key] = {
-                'filename': info['filename'],
-                'url': info['url'],
-                'path': info['path'],
-                'exists': exists
-            }
-        return jsonify({
-            'status': 'success',
-            'templates': templates
-        }), 200
-
-    @app.route('/health')
-    def health_check():
-        return jsonify({
-            'status': 'ok',
-            'message': 'Web Intern API is running',
-            'blueprints_registered': len(app.blueprints)
-        }), 200
-
+    # Initialize Database Schema
+    init_db()
+    
+    # Register Blueprints
+    app.register_blueprint(auth_bp)
+    app.register_blueprint(sector_bp)
+    app.register_blueprint(internship_bp)
+    app.register_blueprint(application_bp)
+    app.register_blueprint(submission_bp)
+    app.register_blueprint(certificate_bp)
+    app.register_blueprint(payment_bp)
+    app.register_blueprint(admin_bp)
+    
+    # Serve SPA index
     @app.route('/')
-    def serve_index():
-        static_dir = os.path.join(os.path.dirname(__file__), 'static')
-        if os.path.exists(os.path.join(static_dir, 'index.html')):
-            return send_from_directory(static_dir, 'index.html')
-        return jsonify({'message': 'Web Intern API is running'}), 200
+    def index():
+        return send_from_directory('static', 'index.html')
 
-    @app.route('/<path:path>')
-    def serve_static(path):
-        static_dir = os.path.join(os.path.dirname(__file__), 'static')
-        target = os.path.join(static_dir, path)
-        if os.path.exists(target) and not os.path.isdir(target):
-            return send_from_directory(static_dir, path)
-        if os.path.exists(os.path.join(static_dir, 'index.html')):
-            return send_from_directory(static_dir, 'index.html')
-        return jsonify({'message': 'Web Intern API is running', 'requested_path': path}), 200
+    @app.route('/api/health', methods=['GET'])
+    def health_check():
+        from utils.supabase_client import check_supabase_connection
+        sp_status = check_supabase_connection()
+        return jsonify({
+            'status': 'healthy',
+            'database': 'sqlite',
+            'supabase': sp_status
+        }), 200
 
+    @app.route('/api/supabase/status', methods=['GET'])
+    def supabase_status():
+        from utils.supabase_client import check_supabase_connection
+        sp_status = check_supabase_connection()
+        return jsonify(sp_status), 200 if sp_status.get('connected') else 500
+
+    @app.route('/api/supabase/create-account', methods=['POST'])
+    def supabase_create_account():
+        from utils.supabase_client import create_supabase_user, login_supabase_user
+        data = request.get_json() or {}
+        email = data.get('email', '').strip()
+        password = data.get('password', '')
+        metadata = data.get('metadata', {})
+
+        if not email or not password:
+            return jsonify({'error': 'Email and password required'}), 400
+
+        res = create_supabase_user(email, password, user_metadata=metadata)
+        if res.get('success'):
+            login_res = login_supabase_user(email, password)
+            return jsonify({
+                'message': 'Supabase account created and verified successfully',
+                'user': res.get('user'),
+                'session_login_verified': login_res.get('success')
+            }), 201
+        else:
+            return jsonify({'error': res.get('error')}), 400
+
+    @app.route('/api/google-sheets/test', methods=['GET', 'POST'])
+    def google_sheets_test():
+        from utils.google_sheets import send_to_google_sheets
+        from config import Config
+
+        test_payload = {
+            'timestamp': '2026-09-16 07:22:00',
+            'full_name': 'Test Google Sheets User',
+            'email': 'sheets_test@webintern.in',
+            'status': 'VERIFIED_CONNECTED',
+            'webhook_url': Config.GOOGLE_SHEETS_WEBHOOK_URL
+        }
+        res = send_to_google_sheets('TEST_PING', test_payload)
+        return jsonify({
+            'message': 'Google Sheets Webhook test executed',
+            'result': res
+        }), 200 if res.get('success') else 500
+
+    @app.route('/api/google-sheets/sync-all', methods=['POST'])
+    def google_sheets_sync_all():
+        from utils.google_sheets import sync_all_existing_data_to_google_sheets
+        counts = sync_all_existing_data_to_google_sheets()
+        return jsonify({
+            'message': 'All existing data synced to Google Sheets Webhook',
+            'synced_counts': counts
+        }), 200
+        
     @app.errorhandler(404)
     def not_found(e):
-        req_path = request.path if request else ''
-        if req_path.startswith('/api/') or req_path.startswith('/internships') or req_path.startswith('/sectors'):
-            return jsonify({'error': f"API endpoint '{req_path}' not found"}), 404
-        static_dir = os.path.join(os.path.dirname(__file__), 'static')
-        if os.path.exists(os.path.join(static_dir, 'index.html')):
-            return send_from_directory(static_dir, 'index.html')
-        return jsonify({'error': 'Page not found'}), 404
-
-    @app.errorhandler(500)
-    def server_error(e):
-        return jsonify({'error': 'Internal server error', 'details': str(e)}), 500
-
+        # Fallback to SPA index for non-API routes
+        if not request.path.startswith('/api/'):
+            return send_from_directory('static', 'index.html')
+        return jsonify({'error': 'Endpoint not found'}), 404
+        
     return app
 
 app = create_app()
 
 if __name__ == '__main__':
-    port = int(os.getenv('PORT', 5000))
-    app.run(host='0.0.0.0', port=port, debug=False, threaded=True, use_reloader=False)
+    log_success("Starting Web Intern Platform server on http://127.0.0.1:5000")
+    app.run(host='0.0.0.0', port=5000, debug=True)

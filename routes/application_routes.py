@@ -1,263 +1,228 @@
 import uuid
-import datetime
 import os
-from flask import Blueprint, request, jsonify, Response
-from database import query_db, execute_db
-from utils.auth import jwt_required
-from utils.email_service import send_offer_letter_email
-from utils.pdf_generator import generate_offer_letter_pdf
-from utils.google_sheets_service import sync_offer_letter_to_google_sheets
+import datetime
+from flask import Blueprint, request, jsonify, g, send_file
+from database import get_db_connection
 from config import Config
+from utils.auth import jwt_required
+from utils.pdf_generator import generate_offer_letter_pdf
+from utils.email_service import send_offer_letter_email_async
+from utils.google_sheets import sync_event_to_google_sheets_async
+from utils.logger import log_info, log_success, log_error
 
 application_bp = Blueprint('application_bp', __name__)
 
 @application_bp.route('/api/applications', methods=['POST'])
-@application_bp.route('/applications', methods=['POST'])
-@application_bp.route('/api/enrollments', methods=['POST'])
-@application_bp.route('/enrollments', methods=['POST'])
 @jwt_required
 def create_application():
-    user = request.user
+    user_id = g.user_id
+    user_email = g.user_email
     data = request.get_json() or {}
-    internship_id = data.get('internship_id') or data.get('course_id')
-
+    
+    internship_id = data.get('internship_id')
     if not internship_id:
-        return jsonify({'error': 'Internship / Course ID is required.'}), 400
-
-    internship = query_db("SELECT * FROM internships WHERE id = ?", (internship_id,), one=True)
+        return jsonify({'error': 'internship_id is required'}), 400
+        
+    conn = get_db_connection()
+    cursor = conn.cursor()
+    
+    # Verify user profile exists
+    cursor.execute("SELECT * FROM profiles WHERE id = ?", (user_id,))
+    profile = cursor.fetchone()
+    if not profile:
+        conn.close()
+        return jsonify({'error': 'Student profile not found'}), 404
+        
+    # Verify internship program exists
+    cursor.execute("SELECT * FROM internships WHERE id = ?", (internship_id,))
+    internship = cursor.fetchone()
     if not internship:
-        return jsonify({'error': 'Selected internship program not found.'}), 404
-
-    # Check existing active application/enrollment
-    existing = query_db("SELECT * FROM applications WHERE user_id = ? AND internship_id = ?", (user['sub'], internship_id), one=True)
+        conn.close()
+        return jsonify({'error': 'Internship program not found'}), 404
+        
+    # Check for existing active application
+    cursor.execute("""
+        SELECT * FROM applications 
+        WHERE user_id = ? AND internship_id = ? AND status != 'cancelled'
+    """, (user_id, internship_id))
+    existing = cursor.fetchone()
     if existing:
+        conn.close()
+        app_obj = dict(existing)
         return jsonify({
-            'message': 'You have already applied to / enrolled in this internship.',
-            'application': existing,
-            'enrollment': existing
+            'message': 'You are already enrolled in this internship program.',
+            'application': app_obj,
+            'is_existing': True
         }), 200
 
     app_id = str(uuid.uuid4())
-    now_dt = datetime.datetime.now()
-    start_date_str = now_dt.strftime("%B %d, %Y")
-    duration_weeks = internship.get('duration_weeks') or 4
-    end_dt = now_dt + datetime.timedelta(weeks=duration_weeks)
-    end_date_str = end_dt.strftime("%B %d, %Y")
-
-    offer_id = f"WI-OFFER-2026-{app_id[:6].upper()}"
-    cert_id = f"WI-CERT-2026-{app_id[:6].upper()}"
-
-    execute_db("""
-        INSERT INTO applications (id, user_id, internship_id, status, offer_letter_sent, start_date, end_date, offer_letter_id, certificate_id, completion_status)
-        VALUES (?, ?, ?, 'active', 1, ?, ?, ?, ?, 'pending')
-    """, (app_id, user['sub'], internship_id, start_date_str, end_date_str, offer_id, cert_id))
-
-    # Fetch user profile to populate Master Internship Record
-    profile = query_db("SELECT * FROM profiles WHERE id = ?", (user['sub'],), one=True)
-    student_name = profile['full_name'] if profile and 'full_name' in profile else user.get('name', 'Student Candidate')
-    to_email = profile['email'] if profile and 'email' in profile else user.get('email')
-    student_mobile = (profile.get('phone') or profile.get('mobile') or "") if profile else ""
-    student_college = (profile.get('college') or data.get('college') or data.get('college_name') or "Recognized College / Institution") if profile else (data.get('college') or "Recognized College / Institution")
-    student_dept = (profile.get('department') or data.get('department') or data.get('department_name') or internship['title'].replace(" Internship", "")) if profile else (data.get('department') or internship['title'].replace(" Internship", ""))
-    student_degree = (profile.get('degree') or data.get('degree') or "Recognized Degree Program") if profile else "Recognized Degree Program"
-
-    # Create Master Record (Single Source of Truth)
-    from utils.master_record_service import save_master_record
-    master_data = {
-        "student_full_name": student_name,
-        "student_email": to_email,
-        "student_mobile": student_mobile,
-        "college_name": student_college,
-        "degree": student_degree,
-        "department": student_dept,
-        "internship_position": f"{internship['title']} Intern",
-        "internship_domain": internship['title'],
-        "internship_start_date": start_date_str,
-        "internship_end_date": end_date_str,
-        "project_title": internship.get('project_name') or f"{internship['title']} Capstone Project",
-        "mentor_name": internship.get('guide_name') or "Dr. A. K. Sharma",
-        "mentor_designation": "Technical Director",
-        "offer_id": offer_id,
-        "certificate_id": cert_id,
-        "user_id": user['sub'],
-        "application_id": app_id
-    }
-    master_rec, _ = save_master_record(master_data)
-
-    date_str = start_date_str
-    pdf_bytes = generate_offer_letter_pdf(
-        student_name=student_name,
-        internship_title=f"{internship['title']} Intern",
-        date_str=date_str,
-        save_id=app_id,
-        company_name=internship.get('company_name') or "Web Intern Platform",
-        start_date=start_date_str,
-        end_date=end_date_str,
-        duration=f"{duration_weeks} Weeks",
-        location=internship.get('location') or "Virtual / Remote",
-        skills_tools=internship.get('skills_tools'),
-        tasks_projects=internship.get('tasks_projects'),
-        offer_id=offer_id,
-        college_name=student_college,
-        department=student_dept
-    )
-
-    # Save document record in DB
-    doc_id = str(uuid.uuid4())
-    file_path = os.path.join(Config.GENERATED_OFFERS_DIR, f"offer_{app_id}.pdf")
+    rand_code = uuid.uuid4().hex[:6].upper()
+    offer_doc_num = f"WI-OFFER-2026-{rand_code}"
+    cert_doc_num = f"WI-CERT-2026-{rand_code}"
     
-    # Trigger transactional offer letter email
-    email_success, email_res = send_offer_letter_email(
-        to_email=to_email,
-        student_name=student_name,
+    today = datetime.date.today()
+    end_date_val = today + datetime.timedelta(days=28)
+    start_date_str = today.strftime("%B %d, %Y")
+    end_date_str = end_date_val.strftime("%B %d, %Y")
+    
+    # 1. Insert Application
+    cursor.execute("""
+        INSERT INTO applications (
+            id, user_id, internship_id, status, offer_letter_sent, start_date, end_date,
+            offer_letter_id, certificate_id, completion_status, google_sync_status, applied_at
+        ) VALUES (?, ?, ?, 'active', 1, ?, ?, ?, ?, 'pending', 'synced', CURRENT_TIMESTAMP)
+    """, (app_id, user_id, internship_id, start_date_str, end_date_str, offer_doc_num, cert_doc_num))
+    
+    # 2. Insert Certificate stub
+    cert_id = str(uuid.uuid4())
+    cursor.execute("""
+        INSERT INTO certificates (id, application_id, certificate_url, is_verified_paid, issued_at)
+        VALUES (?, ?, ?, 0, CURRENT_TIMESTAMP)
+    """, (cert_doc_num, app_id, f"/api/certificates/{cert_doc_num}/pdf"))
+    
+    # 3. Insert Master Internship record
+    master_id = str(uuid.uuid4())
+    cursor.execute("""
+        INSERT INTO master_internships (
+            id, student_full_name, student_email, student_mobile, college_name, degree, department,
+            internship_position, internship_domain, internship_start_date, internship_end_date,
+            project_title, mentor_name, offer_id, certificate_id, user_id, application_id
+        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+    """, (
+        master_id, profile['full_name'], profile['email'], profile['phone'] or profile['mobile'] or '',
+        profile['college'] or 'University Student', profile['degree'] or 'Bachelor Degree', profile['department'] or 'General Track',
+        internship['title'], internship['slug'], start_date_str, end_date_str,
+        internship['project_name'] or 'Enterprise Internship Capstone',
+        internship['guide_name'] or 'Dr. A. K. Sharma (Technical Director)',
+        offer_doc_num, cert_doc_num, user_id, app_id
+    ))
+    
+    # 4. Generate Offer Letter PDF
+    pdf_path = generate_offer_letter_pdf(
+        student_name=profile['full_name'],
+        email=profile['email'],
         internship_title=internship['title'],
-        pdf_bytes=pdf_bytes,
         start_date=start_date_str,
         end_date=end_date_str,
-        duration=f"{duration_weeks} Weeks",
-        offer_id=offer_id
+        doc_number=offer_doc_num,
+        guide_name=internship['guide_name'] or 'Dr. A. K. Sharma (Technical Director)'
     )
+    
+    # 5. Insert Document Record
+    doc_id = str(uuid.uuid4())
+    cursor.execute("""
+        INSERT INTO documents (
+            id, application_id, student_id, document_type, document_number, file_path, status, email_status
+        ) VALUES (?, ?, ?, 'OFFER_LETTER', ?, ?, 'ISSUED', 'SENT')
+    """, (doc_id, app_id, user_id, offer_doc_num, pdf_path))
 
-    email_status = "SENT" if email_success else "FAILED"
-    msg_id = email_res.get('id') if isinstance(email_res, dict) else str(email_res)
-
-    execute_db("""
-        INSERT INTO documents (id, application_id, student_id, document_type, document_number, file_path, status, email_status, email_message_id)
-        VALUES (?, ?, ?, 'OFFER_LETTER', ?, ?, 'ISSUED', ?, ?)
-    """, (doc_id, app_id, user['sub'], offer_id, file_path, email_status, msg_id))
-
-    # Trigger Google Sheets sync
-    sync_offer_letter_to_google_sheets({
-        "offer_id": offer_id,
-        "student_id": user['sub'],
-        "student_name": student_name,
-        "email": to_email,
-        "mobile": student_mobile,
-        "college": student_college,
-        "department": student_dept,
-        "degree": student_degree,
-        "course_name": internship['title'],
-        "role": internship.get('role') or internship['title'],
-        "company": internship.get('company_name') or "Web Intern Platform",
-        "start_date": start_date_str,
-        "end_date": end_date_str,
-        "duration": f"{duration_weeks} Weeks",
-        "location": internship.get('location') or "Virtual / Remote",
-        "issue_date": date_str,
-        "document_status": "ISSUED",
-        "email_status": email_status,
-        "email_message_id": msg_id
-    }, document_id=doc_id)
-
-    new_app = query_db("SELECT * FROM applications WHERE id = ?", (app_id,), one=True)
+    conn.commit()
+    
+    # Fetch final application object
+    cursor.execute("""
+        SELECT a.*, i.title as internship_title, i.slug as internship_slug, i.internship_emoji, i.duration_weeks
+        FROM applications a
+        JOIN internships i ON a.internship_id = i.id
+        WHERE a.id = ?
+    """, (app_id,))
+    app_obj = dict(cursor.fetchone())
+    conn.close()
+    
+    # Trigger background tasks
+    send_offer_letter_email_async(profile['email'], profile['full_name'], internship['title'], pdf_path)
+    sync_event_to_google_sheets_async('APPLICATION', {
+        'application_id': app_id, 'offer_number': offer_doc_num, 'student': profile['full_name'], 'email': profile['email']
+    })
+    
+    log_success(f"Enrolled {profile['email']} into {internship['title']}. App ID: {app_id}")
+    
     return jsonify({
-        'message': 'Application & Enrollment submitted successfully! Your official offer letter has been generated and sent to your email.',
-        'application': new_app,
-        'enrollment': new_app,
-        'offer_letter_id': offer_id
+        'message': 'Application submitted and Offer Letter generated successfully!',
+        'application': app_obj
     }), 201
 
 @application_bp.route('/api/applications/me', methods=['GET'])
-@application_bp.route('/applications/me', methods=['GET'])
 @jwt_required
 def get_my_applications():
-    user = request.user
-    apps = query_db("""
-        SELECT a.*, i.title as internship_title, i.slug as internship_slug, i.duration_weeks, i.cover_image_url,
-               s.name as sector_name, c.id as certificate_id, c.is_verified_paid
+    user_id = g.user_id
+    user_email = g.user_email
+    
+    conn = get_db_connection()
+    cursor = conn.cursor()
+    
+    cursor.execute("""
+        SELECT a.*, i.title as internship_title, i.slug as internship_slug, i.internship_emoji, i.duration_weeks, i.company_name, c.is_verified_paid
         FROM applications a
         JOIN internships i ON a.internship_id = i.id
-        JOIN sectors s ON i.sector_id = s.id
-        LEFT JOIN certificates c ON a.id = c.application_id
-        WHERE a.user_id = ?
+        LEFT JOIN certificates c ON a.id = c.application_id OR a.certificate_id = c.id
+        WHERE a.user_id = ? OR LOWER(a.user_id) = ?
         ORDER BY a.applied_at DESC
-    """, (user['sub'],))
-
-    for app_item in apps:
-        # Calculate weekly progress
-        approved_subs = query_db("""
-            SELECT COUNT(*) as cnt FROM submissions
-            WHERE application_id = ? AND status IN ('approved', 'graded')
-        """, (app_item['id'],), one=True)
+    """, (user_id, user_email))
+    apps = [dict(r) for r in cursor.fetchall()]
+    
+    for app in apps:
+        # Fetch submissions for this app
+        cursor.execute("SELECT * FROM submissions WHERE application_id = ? ORDER BY week_number ASC", (app['id'],))
+        submissions = [dict(s) for s in cursor.fetchall()]
+        app['submissions'] = submissions
         
-        completed_weeks = approved_subs['cnt'] if approved_subs else 0
-        app_item['completed_weeks'] = completed_weeks
-        app_item['progress_percent'] = int((completed_weeks / app_item['duration_weeks']) * 100)
+        # Calculate completed weeks (where status = 'graded' or 'approved')
+        completed_weeks = len([s for s in submissions if s.get('status') in ('graded', 'approved')])
+        duration = app.get('duration_weeks') or 4
+        app['completed_weeks'] = completed_weeks
+        app['progress_percentage'] = min(100, int((completed_weeks / duration) * 100))
         
-        # Latest submission
-        latest_sub = query_db("""
-            SELECT * FROM submissions
-            WHERE application_id = ?
-            ORDER BY week_number DESC LIMIT 1
-        """, (app_item['id'],), one=True)
-        app_item['latest_submission'] = latest_sub
-
-    return jsonify({'applications': apps, 'enrollments': apps}), 200
-
-@application_bp.route('/api/applications/<app_id>', methods=['GET'])
-@application_bp.route('/applications/<app_id>', methods=['GET'])
-@jwt_required
-def get_application_detail(app_id):
-    user = request.user
-    app_record = query_db("""
-        SELECT a.*, i.title as internship_title, i.slug as internship_slug, i.duration_weeks, i.full_description,
-               s.name as sector_name, c.id as certificate_id, c.is_verified_paid
-        FROM applications a
-        JOIN internships i ON a.internship_id = i.id
-        JOIN sectors s ON i.sector_id = s.id
-        LEFT JOIN certificates c ON a.id = c.application_id
-        WHERE a.id = ? AND (a.user_id = ? OR ? = 'admin')
-    """, (app_id, user['sub'], user.get('role')), one=True)
-
-    if not app_record:
-        return jsonify({'error': 'Application record not found.'}), 404
-
-    tasks = query_db("SELECT * FROM internship_tasks WHERE internship_id = ? ORDER BY week_number ASC", (app_record['internship_id'],))
-    submissions = query_db("SELECT * FROM submissions WHERE application_id = ? ORDER BY week_number ASC", (app_id,))
-
-    sub_map = {s['week_number']: s for s in submissions}
-
-    for task in tasks:
-        task['submission'] = sub_map.get(task['week_number'])
-
-    app_record['tasks'] = tasks
-    return jsonify({'application': app_record, 'enrollment': app_record}), 200
+        # Check if tenure / end_date has passed or all tasks completed
+        is_ended = False
+        if app.get('completion_status') == 'completed' or completed_weeks >= duration:
+            is_ended = True
+        elif app.get('end_date'):
+            try:
+                end_dt = datetime.datetime.strptime(app['end_date'], "%B %d, %Y").date()
+                is_ended = (datetime.date.today() >= end_dt)
+            except Exception:
+                is_ended = True
+        else:
+            is_ended = True
+            
+        app['is_tenure_completed'] = is_ended
+        app['can_download_certificate'] = bool(app.get('is_verified_paid')) and is_ended
+        
+    conn.close()
+    return jsonify({'applications': apps}), 200
 
 @application_bp.route('/api/applications/<app_id>/offer-letter.pdf', methods=['GET'])
-@jwt_required
 def download_offer_letter(app_id):
-    user = request.user
-    app_record = query_db("""
-        SELECT a.*, i.title as internship_title, i.duration_weeks, i.company_name, i.location, i.skills_tools, i.tasks_projects
-        FROM applications a
-        JOIN internships i ON a.internship_id = i.id
-        WHERE a.id = ? AND (a.user_id = ? OR ? = 'admin')
-    """, (app_id, user['sub'], user.get('role')), one=True)
-
-    if not app_record:
-        return jsonify({'error': 'Application not found.'}), 404
-
-    profile = query_db("SELECT * FROM profiles WHERE id = ?", (app_record['user_id'],), one=True)
-    student_name = profile['full_name'] if profile else "Intern Candidate"
-    date_str = app_record.get('start_date') or datetime.datetime.now().strftime("%B %d, %Y")
-
-    pdf_bytes = generate_offer_letter_pdf(
-        student_name=student_name,
-        internship_title=app_record['internship_title'],
-        date_str=date_str,
-        save_id=app_id,
-        company_name=app_record.get('company_name') or "Web Intern Platform",
-        start_date=app_record.get('start_date'),
-        end_date=app_record.get('end_date'),
-        duration=f"{app_record.get('duration_weeks') or 4} Weeks",
-        location=app_record.get('location') or "Virtual / Remote",
-        skills_tools=app_record.get('skills_tools'),
-        tasks_projects=app_record.get('tasks_projects'),
-        offer_id=app_record.get('offer_letter_id')
-    )
+    conn = get_db_connection()
+    cursor = conn.cursor()
     
-    return Response(
-        pdf_bytes,
-        mimetype='application/pdf',
-        headers={'Content-Disposition': f'inline; filename="Offer_Letter_{app_id[:8]}.pdf"'}
+    cursor.execute("SELECT * FROM applications WHERE id = ? OR offer_letter_id = ?", (app_id, app_id))
+    app_record = cursor.fetchone()
+    
+    if not app_record:
+        conn.close()
+        return jsonify({'error': 'Application record not found'}), 404
+        
+    doc_number = app_record['offer_letter_id']
+    pdf_filename = f"{doc_number}.pdf"
+    file_path = os.path.join(Config.OFFER_LETTERS_DIR, pdf_filename)
+    
+    # Always fetch student & program details to ensure fresh generation with latest assets & QR code
+    cursor.execute("SELECT full_name, email FROM profiles WHERE id = ?", (app_record['user_id'],))
+    prof = cursor.fetchone()
+    cursor.execute("SELECT title, guide_name FROM internships WHERE id = ?", (app_record['internship_id'],))
+    intern = cursor.fetchone()
+    conn.close()
+    
+    s_name = prof['full_name'] if prof else "Internship Candidate"
+    s_email = prof['email'] if prof else "student@webintern.com"
+    i_title = intern['title'] if intern else "Virtual Internship Program"
+    g_name = intern['guide_name'] if intern else "Dr. A. K. Sharma (Technical Director)"
+    
+    file_path = generate_offer_letter_pdf(
+        student_name=s_name, email=s_email, internship_title=i_title,
+        start_date=app_record['start_date'], end_date=app_record['end_date'],
+        doc_number=doc_number, guide_name=g_name
     )
+        
+    return send_file(file_path, mimetype='application/pdf', as_attachment=False, download_name=f"Offer_Letter_{doc_number}.pdf")

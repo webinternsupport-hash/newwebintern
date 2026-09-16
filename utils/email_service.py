@@ -1,246 +1,159 @@
-import base64
+import threading
 import requests
+import json
+import os
+import base64
 from config import Config
+from utils.logger import log_info, log_error, log_success
 
-def _get_resend_key():
-    return (Config.RESEND_API_KEY or "").strip()
-
-def _dispatch_email(to_email, subject, html_content, attachments=None):
-    api_key = _get_resend_key()
-    from_email = getattr(Config, 'RESEND_FROM_EMAIL', 'notifications@webintern.in') or 'notifications@webintern.in'
-    
-    if api_key and not api_key.startswith("re_demo") and api_key not in ["", "your_resend_api_key"]:
-        url = "https://api.resend.com/emails"
-        headers = {
-            "Authorization": f"Bearer {api_key}",
-            "Content-Type": "application/json"
-        }
-        
-        payload = {
-            "from": f"Web Intern <{from_email}>",
-            "to": [to_email] if isinstance(to_email, str) else to_email,
-            "subject": subject,
-            "html": html_content
-        }
-        
-        if attachments:
-            payload["attachments"] = attachments
-            
+def send_offer_letter_email_async(to_email, student_name, internship_title, pdf_path):
+    """
+    Asynchronously sends offer letter email with PDF attachment via Resend API.
+    """
+    def _send():
         try:
-            import urllib3
-            urllib3.disable_warnings(urllib3.exceptions.InsecureRequestWarning)
-            res = requests.post(url, headers=headers, json=payload, timeout=10, verify=False)
-            if res.status_code in [200, 201]:
-                data = res.json()
-                print(f"[Resend Email Success]: Sent to {to_email}, ID: {data.get('id')}")
-                return True, data
+            if not Config.RESEND_API_KEY:
+                log_info(f"[EMAIL MOCK] Offer Letter email queued for {to_email} ({internship_title}). Resend API key not set.")
+                return
+
+            url = "https://api.resend.com/emails"
+            headers = {
+                "Authorization": f"Bearer {Config.RESEND_API_KEY}",
+                "Content-Type": "application/json"
+            }
+            
+            attachments = []
+            if pdf_path and os.path.exists(pdf_path):
+                try:
+                    with open(pdf_path, 'rb') as f:
+                        b64_content = base64.b64encode(f.read()).decode('utf-8')
+                    filename = os.path.basename(pdf_path)
+                    attachments.append({
+                        "filename": filename,
+                        "content": b64_content
+                    })
+                except Exception as ex:
+                    log_error(f"Failed to encode offer letter PDF attachment: {ex}")
+            
+            payload = {
+                "from": Config.FROM_EMAIL,
+                "to": [to_email],
+                "subject": f"🎉 Official Offer Letter: {internship_title} - Web Intern",
+                "html": f"""
+                    <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto; padding: 20px; border: 1px solid #e2e8f0; border-radius: 8px;">
+                        <h2 style="color: #1e3a8a;">Welcome to Web Intern Platform!</h2>
+                        <p>Dear <b>{student_name}</b>,</p>
+                        <p>We are delighted to accept your application for the <b>{internship_title}</b> 4-Week Virtual Internship Program.</p>
+                        <p>Your official <b>Offer Letter (PDF)</b> has been attached to this email and is also available for direct download in your student dashboard.</p>
+                        <div style="background-color: #f8fafc; padding: 15px; border-left: 4px solid #2563eb; margin: 20px 0;">
+                            <p style="margin: 0; font-weight: bold;">Next Steps:</p>
+                            <ol style="margin-top: 5px; padding-left: 20px;">
+                                <li>Log into your Web Intern Dashboard.</li>
+                                <li>Access your weekly 4-module task workspace.</li>
+                                <li>Submit your weekly project deliverables (PDF format).</li>
+                            </ol>
+                        </div>
+                        <p>If you have any questions, feel free to reply to this email at <a href="mailto:{Config.SUPPORT_EMAIL}">{Config.SUPPORT_EMAIL}</a>.</p>
+                        <hr style="border: none; border-top: 1px solid #e2e8f0; margin: 20px 0;"/>
+                        <p style="font-size: 12px; color: #64748b;">Web Intern Academic Board & Technical Directorate | ISO Certified MSME Entity</p>
+                    </div>
+                """,
+                "attachments": attachments if attachments else None
+            }
+            # Remove None values
+            payload = {k: v for k, v in payload.items() if v is not None}
+
+            response = requests.post(url, headers=headers, json=payload, timeout=12)
+            if response.status_code in (200, 201):
+                log_success(f"Offer Letter email sent successfully via Resend API to {to_email}")
+            elif response.status_code == 403 and "onboarding@resend.dev" not in payload.get("from", ""):
+                # Retry with default Resend verified sender
+                payload["from"] = "onboarding@resend.dev"
+                res_retry = requests.post(url, headers=headers, json=payload, timeout=12)
+                if res_retry.status_code in (200, 201):
+                    log_success(f"Offer Letter email sent successfully (via onboarding@resend.dev fallback) to {to_email}")
+                else:
+                    log_error(f"Resend API error (retry): {res_retry.text}")
             else:
-                err_body = res.text
-                print(f"[Resend Email Error HTTP {res.status_code}]: {err_body}")
-                return False, f"Resend API error ({res.status_code}): {err_body}"
+                log_error(f"Resend API error sending Offer Letter: {response.text}")
+
         except Exception as e:
-            print(f"[Resend Email Exception]: {e}. Falling back to mock dispatch.")
-            return True, {"id": "resend_offline_msg_id_123", "status": "queued_offline"}
-    else:
-        print(f"\n================ [MOCK EMAIL DISPATCH] ================")
-        print(f"TO: {to_email}")
-        print(f"SUBJECT: {subject}")
-        print(f"=======================================================\n")
-        return True, {"id": "mock_msg_id_12345", "status": "mock_sent"}
+            log_error(f"Failed to send Offer Letter email to {to_email}: {e}")
 
-def send_forgot_password_email(to_email, reset_link=None, reset_code=None):
-    subject = "Web Intern - Password Reset Request"
-    if not reset_link:
-        reset_link = "https://webintern.in/#/reset-password"
-    
-    code_html = f"""
-        <div style="text-align: center; margin: 24px 0;">
-            <span style="font-size: 28px; font-weight: 700; letter-spacing: 4px; color: #0B3D91; background: #EAF1FB; padding: 12px 24px; border-radius: 8px; display: inline-block;">
-                {reset_code}
-            </span>
-        </div>
-    """ if reset_code else ""
+    thread = threading.Thread(target=_send)
+    thread.daemon = True
+    thread.start()
 
-    html_content = f"""
-    <div style="font-family: 'Inter', Arial, sans-serif; max-width: 500px; margin: 0 auto; padding: 24px; border: 1px solid #DCE6F5; border-radius: 12px; background-color: #FFFFFF;">
-        <div style="text-align: center; margin-bottom: 20px;">
-            <h2 style="color: #0B3D91; margin: 0; font-size: 24px;">web<span style="color: #2E7DFF;">intern</span></h2>
-            <p style="color: #4B5563; font-size: 14px; margin-top: 4px;">Virtual Internship Platform</p>
-        </div>
-        <hr style="border: none; border-top: 1px solid #DCE6F5; margin: 20px 0;" />
-        <h3 style="color: #082B66; font-size: 18px; margin-bottom: 12px;">Password Reset Request</h3>
-        <p style="color: #4B5563; line-height: 1.5;">We received a request to reset your password for your Web Intern account.</p>
-        {code_html}
-        <div style="text-align: center; margin: 24px 0;">
-            <a href="{reset_link}" style="background-color: #0B3D91; color: #FFFFFF; text-decoration: none; padding: 12px 28px; border-radius: 24px; font-weight: 600; display: inline-block;">Reset Password →</a>
-        </div>
-        <p style="color: #4B5563; font-size: 13px;">If you did not request a password reset, you can safely ignore this email.</p>
-        <hr style="border: none; border-top: 1px solid #DCE6F5; margin: 20px 0;" />
-        <p style="color: #9CA3AF; font-size: 12px; text-align: center;">© 2026 Web Intern. Secure Automated Verification System.</p>
-    </div>
+
+def send_certificate_email_async(to_email, student_name, internship_title, cert_id, pdf_path):
     """
-    return _dispatch_email(to_email, subject, html_content)
-
-def send_offer_letter_email(to_email, student_name, internship_title, pdf_bytes=None, start_date=None, end_date=None, duration="4 Weeks", offer_id=None):
-    subject = "Your WebIntern Internship Offer Letter"
-    eff_start = start_date or "Immediate"
-    eff_end = end_date or "4 Weeks from Start Date"
-    eff_offer_id = offer_id or "WI-OFFER-2026"
-
-    html_content = f"""
-    <div style="font-family: 'Inter', Arial, sans-serif; max-width: 600px; margin: 0 auto; padding: 24px; border: 1px solid #DCE6F5; border-radius: 12px; background-color: #FFFFFF;">
-        <div style="text-align: center; margin-bottom: 20px;">
-            <h2 style="color: #0B3D91; margin: 0; font-size: 26px;">web<span style="color: #2E7DFF;">intern</span></h2>
-        </div>
-        <p style="color: #4B5563;">Dear <strong>{student_name}</strong>,</p>
-        <p style="color: #4B5563; font-weight: 600;">Congratulations!</p>
-        <p style="color: #4B5563; line-height: 1.6;">Your internship enrollment with WebIntern has been confirmed.</p>
-        <div style="background-color: #F8FAFC; border: 1px solid #E2E8F0; border-radius: 8px; padding: 16px; margin: 16px 0; color: #334155;">
-            <p style="margin: 4px 0;"><strong>Internship:</strong> {internship_title}</p>
-            <p style="margin: 4px 0;"><strong>Start Date:</strong> {eff_start}</p>
-            <p style="margin: 4px 0;"><strong>End Date:</strong> {eff_end}</p>
-            <p style="margin: 4px 0;"><strong>Duration:</strong> {duration}</p>
-            <p style="margin: 4px 0;"><strong>Offer ID:</strong> {eff_offer_id}</p>
-        </div>
-        <p style="color: #4B5563;">Your Offer Letter is attached to this email. You can also view it from your WebIntern dashboard.</p>
-        <div style="text-align: center; margin: 24px 0;">
-            <a href="https://webintern.in/#/dashboard" style="background-color: #0B3D91; color: #FFFFFF; text-decoration: none; padding: 12px 28px; border-radius: 24px; font-weight: 600; display: inline-block;">Go to Dashboard →</a>
-        </div>
-        <p style="color: #64748B; font-size: 13px;">Regards,<br/>WebIntern Team</p>
-    </div>
+    Asynchronously sends official Verified Certificate email with PDF attachment via Resend API.
     """
-    
-    attachments = None
-    if pdf_bytes:
-        clean_offer_id = str(eff_offer_id).replace('/', '_')
-        encoded_pdf = base64.b64encode(pdf_bytes).decode('utf-8')
-        attachments = [{
-            "filename": f"WebIntern_Offer_Letter_{clean_offer_id}.pdf",
-            "content": encoded_pdf
-        }]
+    def _send():
+        try:
+            if not Config.RESEND_API_KEY:
+                log_info(f"[EMAIL MOCK] Certificate email queued for {to_email} ({internship_title}). Resend API key not set.")
+                return
 
-    return _dispatch_email(to_email, subject, html_content, attachments=attachments)
+            url = "https://api.resend.com/emails"
+            headers = {
+                "Authorization": f"Bearer {Config.RESEND_API_KEY}",
+                "Content-Type": "application/json"
+            }
+            
+            attachments = []
+            if pdf_path and os.path.exists(pdf_path):
+                try:
+                    with open(pdf_path, 'rb') as f:
+                        b64_content = base64.b64encode(f.read()).decode('utf-8')
+                    attachments.append({
+                        "filename": f"Certificate_{cert_id}.pdf",
+                        "content": b64_content
+                    })
+                except Exception as ex:
+                    log_error(f"Failed to encode certificate PDF attachment: {ex}")
+            
+            payload = {
+                "from": Config.FROM_EMAIL,
+                "to": [to_email],
+                "subject": f"🎓 Official Verified Certificate: {internship_title} - Web Intern",
+                "html": f"""
+                    <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto; padding: 20px; border: 1px solid #e2e8f0; border-radius: 8px;">
+                        <h2 style="color: #d97706;">Congratulations on Your Graduation!</h2>
+                        <p>Dear <b>{student_name}</b>,</p>
+                        <p>We are thrilled to inform you that you have successfully completed your <b>{internship_title}</b> Virtual Internship Program!</p>
+                        <p>Your official <b>MSME & ISO Certified Certificate of Completion</b> (Credential ID: <code>{cert_id}</code>) is attached to this email.</p>
+                        <div style="background-color: #fffbe6; padding: 15px; border-left: 4px solid #d97706; margin: 20px 0;">
+                            <p style="margin: 0; font-weight: bold; color: #b45309;">Verified Digital Credential</p>
+                            <p style="margin: 5px 0 0 0; font-size: 14px;">Your certificate features a unique QR verification code. Employers & institutions can instantly verify your credentials at <a href="{Config.APP_URL}/#/verify/{cert_id}">{Config.APP_URL}/#/verify/{cert_id}</a>.</p>
+                        </div>
+                        <p>Best regards,<br/><b>Web Intern Academic Board & Certification Directorate</b></p>
+                        <hr style="border: none; border-top: 1px solid #e2e8f0; margin: 20px 0;"/>
+                        <p style="font-size: 12px; color: #64748b;">Web Intern Platform | Support: {Config.SUPPORT_EMAIL}</p>
+                    </div>
+                """,
+                "attachments": attachments if attachments else None
+            }
+            payload = {k: v for k, v in payload.items() if v is not None}
 
-def send_certificate_email(to_email, student_name, internship_title, cert_id, pdf_bytes=None, start_date=None, end_date=None, verification_url=None):
-    subject = "Your WebIntern Internship Completion Certificate"
-    eff_start = start_date or "N/A"
-    eff_end = end_date or "N/A"
-    eff_verify_url = verification_url or f"https://webintern.in/verify/{cert_id}"
+            response = requests.post(url, headers=headers, json=payload, timeout=12)
+            if response.status_code in (200, 201):
+                log_success(f"Certificate email sent successfully via Resend API to {to_email}")
+            elif response.status_code == 403 and "onboarding@resend.dev" not in payload.get("from", ""):
+                payload["from"] = "onboarding@resend.dev"
+                res_retry = requests.post(url, headers=headers, json=payload, timeout=12)
+                if res_retry.status_code in (200, 201):
+                    log_success(f"Certificate email sent successfully (via onboarding@resend.dev fallback) to {to_email}")
+                else:
+                    log_error(f"Resend API error (retry): {res_retry.text}")
+            else:
+                log_error(f"Resend API error sending Certificate: {response.text}")
 
-    html_content = f"""
-    <div style="font-family: 'Inter', Arial, sans-serif; max-width: 600px; margin: 0 auto; padding: 24px; border: 1px solid #DCE6F5; border-radius: 12px; background-color: #FFFFFF;">
-        <div style="text-align: center; margin-bottom: 20px;">
-            <h2 style="color: #0B3D91; margin: 0; font-size: 26px;">web<span style="color: #2E7DFF;">intern</span></h2>
-        </div>
-        <p style="color: #4B5563;">Dear <strong>{student_name}</strong>,</p>
-        <p style="color: #4B5563; font-weight: 600;">Congratulations on successfully completing your internship with WebIntern.</p>
-        <p style="color: #4B5563; line-height: 1.6;">Your Internship Completion Certificate has been issued.</p>
-        <div style="background-color: #F8FAFC; border: 1px solid #E2E8F0; border-radius: 8px; padding: 16px; margin: 16px 0; color: #334155;">
-            <p style="margin: 4px 0;"><strong>Certificate ID:</strong> {cert_id}</p>
-            <p style="margin: 4px 0;"><strong>Internship:</strong> {internship_title}</p>
-            <p style="margin: 4px 0;"><strong>Start Date:</strong> {eff_start}</p>
-            <p style="margin: 4px 0;"><strong>End Date:</strong> {eff_end}</p>
-        </div>
-        <p style="color: #4B5563;">Your certificate is attached to this email. You can also access it from your WebIntern dashboard.</p>
-        <p style="color: #4B5563;"><strong>Certificate Verification:</strong> <a href="{eff_verify_url}" style="color: #2E7DFF;">{eff_verify_url}</a></p>
-        <div style="text-align: center; margin: 24px 0;">
-            <a href="{eff_verify_url}" style="background-color: #0B3D91; color: #FFFFFF; text-decoration: none; padding: 12px 28px; border-radius: 24px; font-weight: 600; display: inline-block;">Verify Certificate →</a>
-        </div>
-        <p style="color: #64748B; font-size: 13px;">Regards,<br/>WebIntern Team</p>
-    </div>
-    """
+        except Exception as e:
+            log_error(f"Failed to send Certificate email to {to_email}: {e}")
 
-    attachments = None
-    if pdf_bytes:
-        encoded_pdf = base64.b64encode(pdf_bytes).decode('utf-8')
-        attachments = [{
-            "filename": f"WebIntern_Certificate_{cert_id}.pdf",
-            "content": encoded_pdf
-        }]
+    thread = threading.Thread(target=_send)
+    thread.daemon = True
+    thread.start()
 
-    return _dispatch_email(to_email, subject, html_content, attachments=attachments)
-
-def send_feedback_email(to_email, student_name, week_number, status, feedback_text):
-    status_color = "#10B981" if status in ["approved", "graded"] else "#F59E0B"
-    subject = f"Task Week {week_number} Evaluation Update - Web Intern"
-    html_content = f"""
-    <div style="font-family: 'Inter', Arial, sans-serif; max-width: 550px; margin: 0 auto; padding: 24px; border: 1px solid #DCE6F5; border-radius: 12px; background-color: #FFFFFF;">
-        <h3 style="color: #082B66;">Task Evaluation Result</h3>
-        <p style="color: #4B5563;">Hello <strong>{student_name}</strong>,</p>
-        <p style="color: #4B5563;">Your submission for <strong>Week {week_number}</strong> has been reviewed:</p>
-        <div style="padding: 16px; border-radius: 8px; background: #F8F9FA; border-left: 4px solid {status_color}; margin: 16px 0;">
-            <p style="margin: 0; font-weight: 600; color: {status_color}; text-transform: uppercase; font-size: 13px;">Status: {status}</p>
-            <p style="margin: 8px 0 0 0; color: #4B5563;">{feedback_text}</p>
-        </div>
-        <p style="color: #4B5563;">Log in to your student workspace to view complete details or proceed to the next module.</p>
-    </div>
-    """
-    return _dispatch_email(to_email, subject, html_content)
-
-def send_welcome_newsletter(to_email):
-    subject = "Welcome to Web Intern Newsletter!"
-    html_content = """
-    <div style="font-family: 'Inter', Arial, sans-serif; max-width: 500px; margin: 0 auto; padding: 24px;">
-        <h2 style="color: #0B3D91;">web<span style="color: #2E7DFF;">intern</span></h2>
-        <h3>Thank you for subscribing!</h3>
-        <p style="color: #4B5563;">You will now receive weekly career tips, newly launched virtual internships, and industry insights straight to your inbox.</p>
-    </div>
-    """
-    return _dispatch_email(to_email, subject, html_content)
-
-def send_contact_form_notification(sender_name, sender_email, sender_phone="", subject_line="", message_text=""):
-    """
-    Send incoming contact form submission directly to webinternsupport@gmail.com
-    and send confirmation receipt to user.
-    """
-    support_email = "webinternsupport@gmail.com"
-    eff_subject = f"[WebIntern Inquiry] {subject_line or 'New User Message'}: {sender_name}"
-    eff_phone = sender_phone or "Not Provided"
-
-    admin_html = f"""
-    <div style="font-family: 'Inter', Arial, sans-serif; max-width: 600px; margin: 0 auto; padding: 24px; border: 1px solid #DCE6F5; border-radius: 12px; background-color: #FFFFFF;">
-        <div style="background: linear-gradient(135deg, #082B66 0%, #0B3D91 100%); color: white; padding: 20px; border-radius: 8px 8px 0 0; text-align: center;">
-            <h2 style="margin: 0; font-size: 22px; color: white;">WebIntern Support Inquiry Received</h2>
-            <p style="margin: 4px 0 0 0; opacity: 0.9; font-size: 13px;">New user requirements message submitted via website contact form</p>
-        </div>
-        <div style="padding: 20px; border: 1px solid #E2E8F0; border-top: none; border-radius: 0 0 8px 8px; background-color: #F8FAFC;">
-            <p style="margin: 6px 0; color: #1F2937;"><strong>Sender Name:</strong> {sender_name}</p>
-            <p style="margin: 6px 0; color: #1F2937;"><strong>Sender Email:</strong> <a href="mailto:{sender_email}" style="color: #0B3D91; font-weight: 600;">{sender_email}</a></p>
-            <p style="margin: 6px 0; color: #1F2937;"><strong>Phone Number:</strong> {eff_phone}</p>
-            <p style="margin: 6px 0; color: #1F2937;"><strong>Subject:</strong> {subject_line or 'General Support Inquiry'}</p>
-            <hr style="border: none; border-top: 1px solid #CBD5E1; margin: 16px 0;" />
-            <p style="margin: 0 0 8px 0; font-weight: 700; color: #082B66;">Message & Requirement Details:</p>
-            <div style="background-color: #FFFFFF; border: 1px solid #CBD5E1; border-radius: 6px; padding: 16px; font-size: 14px; line-height: 1.6; color: #1E293B; white-space: pre-wrap;">
-{message_text}
-            </div>
-            <div style="margin-top: 24px; text-align: center;">
-                <a href="mailto:{sender_email}?subject=Re: {subject_line or 'WebIntern Support Inquiry'}" style="background-color: #0B3D91; color: #FFFFFF; text-decoration: none; padding: 12px 28px; border-radius: 24px; font-weight: 600; display: inline-block;">Reply Direct to Sender ({sender_email}) →</a>
-            </div>
-        </div>
-    </div>
-    """
-
-    admin_success, admin_res = _dispatch_email(support_email, eff_subject, admin_html)
-
-    user_subject = "We received your message - WebIntern Support"
-    user_html = f"""
-    <div style="font-family: 'Inter', Arial, sans-serif; max-width: 550px; margin: 0 auto; padding: 24px; border: 1px solid #DCE6F5; border-radius: 12px; background-color: #FFFFFF;">
-        <div style="text-align: center; margin-bottom: 16px;">
-            <h2 style="color: #0B3D91; margin: 0; font-size: 26px;">web<span style="color: #2E7DFF;">intern</span></h2>
-            <p style="color: #4B5563; font-size: 14px; margin-top: 2px;">Official Virtual Internship Platform</p>
-        </div>
-        <hr style="border: none; border-top: 1px solid #DCE6F5; margin: 16px 0;" />
-        <p style="color: #1F2937;">Hello <strong>{sender_name}</strong>,</p>
-        <p style="color: #4B5563; line-height: 1.6;">Thank you for contacting <strong>WebIntern Support</strong>. We have received your message and requirement details.</p>
-        <p style="color: #4B5563; line-height: 1.6;">Our support team (<code>webinternsupport@gmail.com</code>) will review your message and get back to you shortly.</p>
-        <div style="background-color: #F8FAFC; border: 1px solid #E2E8F0; border-radius: 8px; padding: 16px; margin: 16px 0; color: #334155; font-size: 13px;">
-            <p style="margin: 2px 0; font-weight: 700;">Summary of Your Message:</p>
-            <p style="margin: 6px 0; color: #4B5563;"><em>"{message_text[:200]}..."</em></p>
-        </div>
-        <p style="color: #64748B; font-size: 13px;">Best regards,<br/><strong>WebIntern Support Team</strong><br/><a href="mailto:webinternsupport@gmail.com" style="color: #0B3D91;">webinternsupport@gmail.com</a></p>
-    </div>
-    """
-    _dispatch_email(sender_email, user_subject, user_html)
-
-    return admin_success, admin_res
 

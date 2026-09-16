@@ -1,391 +1,154 @@
-import datetime
-from flask import Blueprint, jsonify, Response, render_template_string
-from database import query_db
+import os
+from flask import Blueprint, request, jsonify, send_file
+from database import get_db_connection
 from utils.pdf_generator import generate_certificate_pdf
+from config import Config
+from utils.logger import log_info, log_error
 
 certificate_bp = Blueprint('certificate_bp', __name__)
 
-CERTIFICATE_NOT_RELEASED_HTML = """
-<!DOCTYPE html>
-<html lang="en">
-<head>
-  <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Certificate Payment Required — WEBINTERN</title>
-  <style>
-    body {
-      font-family: 'Inter', system-ui, -apple-system, sans-serif;
-      background-color: #0F172A;
-      color: #F8FAFC;
-      margin: 0;
-      padding: 0;
-      display: flex;
-      align-items: center;
-      justify-content: center;
-      min-height: 100vh;
-    }
-    .card {
-      background-color: #1E293B;
-      border: 1px solid #334155;
-      border-radius: 16px;
-      padding: 40px;
-      max-width: 520px;
-      text-align: center;
-      box-shadow: 0 20px 25px -5px rgba(0, 0, 0, 0.5);
-    }
-    .logo {
-      font-size: 28px;
-      font-weight: 800;
-      color: #38BDF8;
-      margin-bottom: 20px;
-    }
-    h2 {
-      font-size: 22px;
-      color: #FFFFFF;
-      margin-top: 0;
-    }
-    p {
-      color: #94A3B8;
-      font-size: 15px;
-      line-height: 1.6;
-      margin-bottom: 24px;
-    }
-    .badge {
-      display: inline-block;
-      background-color: #FEF3C7;
-      color: #92400E;
-      font-weight: 700;
-      font-size: 13px;
-      padding: 6px 16px;
-      border-radius: 99px;
-      margin-bottom: 20px;
-    }
-    .btn {
-      display: inline-block;
-      background-color: #0B3D91;
-      color: #FFFFFF;
-      text-decoration: none;
-      font-weight: 600;
-      font-size: 15px;
-      padding: 12px 28px;
-      border-radius: 99px;
-      transition: background-color 0.2s ease;
-    }
-    .btn:hover {
-      background-color: #1D4ED8;
-    }
-  </style>
-</head>
-<body>
-  <div class="card">
-    <div class="logo">web<span style="color: #38BDF8;">intern</span></div>
-    <div class="badge">💳 ₹199 Certificate Fee & Completion Required</div>
-    <h2>Internship Certificate Not Released Yet</h2>
-    <p>
-      This Internship Completion Certificate requires completion of the 4-week module tasks and verification of the <strong>₹199 Certificate Fee</strong>.
-    </p>
-    <a href="/#/dashboard" class="btn">Go to Dashboard to Pay & Release →</a>
-  </div>
-</body>
-</html>
-"""
-
-CERTIFICATE_ASSIGNMENT_PENDING_HTML = """
-<!DOCTYPE html>
-<html lang="en">
-<head>
-  <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Payment Verified — Assignments Pending — WEBINTERN</title>
-  <style>
-    body {
-      font-family: 'Inter', system-ui, -apple-system, sans-serif;
-      background-color: #0F172A;
-      color: #F8FAFC;
-      margin: 0;
-      padding: 0;
-      display: flex;
-      align-items: center;
-      justify-content: center;
-      min-height: 100vh;
-    }
-    .card {
-      background-color: #1E293B;
-      border: 1px solid #334155;
-      border-radius: 16px;
-      padding: 40px;
-      max-width: 540px;
-      text-align: center;
-      box-shadow: 0 20px 25px -5px rgba(0, 0, 0, 0.5);
-    }
-    .logo {
-      font-size: 28px;
-      font-weight: 800;
-      color: #38BDF8;
-      margin-bottom: 20px;
-    }
-    h2 {
-      font-size: 22px;
-      color: #FFFFFF;
-      margin-top: 0;
-    }
-    p {
-      color: #94A3B8;
-      font-size: 15px;
-      line-height: 1.6;
-      margin-bottom: 24px;
-    }
-    .badge {
-      display: inline-block;
-      background-color: #D1FAE5;
-      color: #065F46;
-      font-weight: 700;
-      font-size: 13px;
-      padding: 6px 16px;
-      border-radius: 99px;
-      margin-bottom: 20px;
-    }
-    .btn {
-      display: inline-block;
-      background-color: #0B3D91;
-      color: #FFFFFF;
-      text-decoration: none;
-      font-weight: 600;
-      font-size: 15px;
-      padding: 12px 28px;
-      border-radius: 99px;
-      transition: background-color 0.2s ease;
-    }
-    .btn:hover {
-      background-color: #1D4ED8;
-    }
-  </style>
-</head>
-<body>
-  <div class="card">
-    <div class="logo">web<span style="color: #38BDF8;">intern</span></div>
-    <div class="badge">✅ Payment Verified — 4-Week Tasks Pending</div>
-    <h2>Payment Received Successfully!</h2>
-    <p>
-      Your certificate payment of <strong>₹199</strong> has been verified. To maintain academic and industry standards, your official Certificate will be automatically issued and emailed to your inbox upon completing all <strong>4 weeks of internship assignments</strong>.
-    </p>
-    <a href="/#/dashboard" class="btn">Go to Dashboard & Complete Assignments →</a>
-  </div>
-</body>
-</html>
-"""
-
-def _is_app_completed(app_id):
-    app_rec = query_db("SELECT status, completion_status FROM applications WHERE id = ?", (app_id,), one=True)
-    if not app_rec:
-        return False
-    if app_rec.get('status') == 'completed' or app_rec.get('completion_status') == 'completed':
-        return True
-    approved_cnt = query_db("SELECT COUNT(*) as cnt FROM submissions WHERE application_id = ? AND status IN ('approved', 'graded')", (app_id,), one=True)
-    return bool(approved_cnt and approved_cnt['cnt'] >= 4)
-
-@certificate_bp.route('/api/certificates/<cert_id>', methods=['GET'])
-@certificate_bp.route('/certificates/<cert_id>', methods=['GET'])
-def get_certificate(cert_id):
-    clean_id = str(cert_id).strip()
-    cert = query_db("""
-        SELECT c.*, a.user_id, a.applied_at, p.full_name as student_name,
-               i.title as internship_title, s.name as sector_name
+@certificate_bp.route('/api/certificates/verify/<cert_id>', methods=['GET'])
+def verify_certificate(cert_id):
+    conn = get_db_connection()
+    cursor = conn.cursor()
+    
+    cursor.execute("""
+        SELECT c.*, a.start_date, a.end_date, a.completion_status,
+               p.full_name as student_name, p.email as student_email, p.college,
+               i.title as internship_title, i.slug as internship_slug, i.guide_name
         FROM certificates c
         JOIN applications a ON c.application_id = a.id
         JOIN profiles p ON a.user_id = p.id
         JOIN internships i ON a.internship_id = i.id
-        JOIN sectors s ON i.sector_id = s.id
-        WHERE c.id = ? OR c.application_id = ? OR a.certificate_id = ? OR a.id = ?
-    """, (clean_id, clean_id, clean_id, clean_id), one=True)
-
-    if not cert:
-        return jsonify({'error': 'Certificate record not found.'}), 404
-
-    return jsonify({'certificate': cert}), 200
-
-@certificate_bp.route('/api/certificates/<cert_id>/pdf', methods=['GET'])
-@certificate_bp.route('/certificates/<cert_id>/pdf', methods=['GET'])
-def download_certificate_pdf(cert_id):
-    clean_id = str(cert_id).strip()
-    cert = query_db("""
-        SELECT c.*, a.id as application_id, a.user_id, a.status as app_status, a.completion_status as app_completion_status, a.end_date, a.start_date, p.full_name as student_name, p.college as student_college, p.department as student_dept,
-               m.college_name as master_college, m.department as master_dept,
-               i.title as internship_title, i.company_name, i.guide_name, i.project_name
-        FROM certificates c
-        JOIN applications a ON c.application_id = a.id
-        JOIN profiles p ON a.user_id = p.id
-        JOIN internships i ON a.internship_id = i.id
-        LEFT JOIN master_internships m ON a.id = m.application_id
-        WHERE c.id = ? OR c.application_id = ? OR a.certificate_id = ? OR a.id = ?
-    """, (clean_id, clean_id, clean_id, clean_id), one=True)
-
-    if not cert:
-        # Check applications directly
-        app_rec = query_db("""
-            SELECT a.*, p.full_name as student_name, p.college as student_college, p.department as student_dept,
-                   m.college_name as master_college, m.department as master_dept,
-                   i.title as internship_title, i.company_name, i.guide_name, i.project_name
-            FROM applications a
-            JOIN profiles p ON a.user_id = p.id
-            JOIN internships i ON a.internship_id = i.id
-            LEFT JOIN master_internships m ON a.id = m.application_id
-            WHERE a.id = ? OR a.certificate_id = ? OR a.certificate_id LIKE ?
-        """, (clean_id, clean_id, f"%{clean_id}%"), one=True)
-
-        if not app_rec:
-            return render_template_string(CERTIFICATE_NOT_RELEASED_HTML), 404
-
-        # Check payment status
-        pmt = query_db("""
-            SELECT * FROM payments 
-            WHERE user_id = ? AND (certificate_id = ? OR certificate_id = ? OR certificate_id = ?) AND status = 'paid'
-        """, (app_rec['user_id'], app_rec['id'], app_rec.get('certificate_id'), clean_id), one=True)
-
-        if not pmt:
-            return render_template_string(CERTIFICATE_NOT_RELEASED_HTML), 402
-
-        # Check 4-week task completion status
-        if not _is_app_completed(app_rec['id']):
-            return render_template_string(CERTIFICATE_ASSIGNMENT_PENDING_HTML), 403
-
-        date_str = datetime.datetime.now().strftime("%B %d, %Y")
-        cert_id_str = app_rec.get('certificate_id') or f"WI-INT-2026-{app_rec['id'][:6].upper()}"
-        eff_college = app_rec.get('master_college') or app_rec.get('student_college')
-        eff_dept = app_rec.get('master_dept') or app_rec.get('student_dept')
-
-        pdf_bytes = generate_certificate_pdf(
-            student_name=app_rec['student_name'],
-            internship_title=app_rec['internship_title'],
-            date_str=date_str,
-            cert_id=cert_id_str,
-            is_verified=True,
-            college_name=eff_college,
-            department=eff_dept,
-            guide_name=app_rec.get('guide_name') or "Dr. A. K. Sharma",
-            project_name=app_rec.get('project_name') or f"{app_rec['internship_title']} Capstone",
-            start_date=app_rec.get('start_date'),
-            end_date=app_rec.get('end_date'),
-            company_name=app_rec.get('company_name') or "Web Intern Platform"
-        )
-        return Response(
-            pdf_bytes,
-            mimetype='application/pdf',
-            headers={'Content-Disposition': f'inline; filename="WebIntern_Certificate_{cert_id_str}.pdf"'}
-        )
-
-    # Check payment status on certificate record
-    is_paid = bool(cert.get('is_verified_paid'))
-    if not is_paid:
-        pmt = query_db("""
-            SELECT * FROM payments 
-            WHERE user_id = ? AND (certificate_id = ? OR certificate_id = ? OR certificate_id = ?) AND status = 'paid'
-        """, (cert['user_id'], cert['id'], cert.get('application_id'), clean_id), one=True)
-        if pmt:
-            is_paid = True
-            from database import execute_db
-            execute_db("UPDATE certificates SET is_verified_paid = 1 WHERE id = ?", (cert['id'],))
-
-    if not is_paid:
-        return render_template_string(CERTIFICATE_NOT_RELEASED_HTML), 402
-
-    # Check 4-week task completion status
-    if not _is_app_completed(cert['application_id']):
-        return render_template_string(CERTIFICATE_ASSIGNMENT_PENDING_HTML), 403
-
-    date_str = datetime.datetime.now().strftime("%B %d, %Y")
-    cert_id_str = cert.get('certificate_id') or cert['id']
-    eff_college = cert.get('master_college') or cert.get('student_college')
-    eff_dept = cert.get('master_dept') or cert.get('student_dept')
-
-    pdf_bytes = generate_certificate_pdf(
-        student_name=cert['student_name'],
-        internship_title=cert['internship_title'],
-        date_str=date_str,
-        cert_id=cert_id_str,
-        is_verified=True,
-        college_name=eff_college,
-        department=eff_dept,
-        guide_name=cert.get('guide_name') or "Dr. A. K. Sharma",
-        project_name=cert.get('project_name') or f"{cert['internship_title']} Capstone",
-        start_date=cert.get('start_date'),
-        end_date=cert.get('end_date'),
-        company_name=cert.get('company_name') or "Web Intern Platform"
-    )
-
-    return Response(
-        pdf_bytes,
-        mimetype='application/pdf',
-        headers={'Content-Disposition': f'inline; filename="WebIntern_Certificate_{cert_id_str}.pdf"'}
-    )
-
-@certificate_bp.route('/api/certificates/<cert_id>/send-email', methods=['POST'])
-def send_certificate_email_route(cert_id):
-    clean_id = str(cert_id).strip()
-    cert = query_db("""
-        SELECT c.*, a.user_id, a.end_date, a.start_date, p.full_name as student_name, p.email as student_email, p.college as student_college, p.department as student_dept,
-               m.college_name as master_college, m.department as master_dept,
-               i.title as internship_title, i.company_name, i.guide_name, i.project_name
-        FROM certificates c
-        JOIN applications a ON c.application_id = a.id
-        JOIN profiles p ON a.user_id = p.id
-        JOIN internships i ON a.internship_id = i.id
-        LEFT JOIN master_internships m ON a.id = m.application_id
-        WHERE c.id = ? OR c.application_id = ? OR a.certificate_id = ? OR a.id = ?
-    """, (clean_id, clean_id, clean_id, clean_id), one=True)
-
-    if not cert:
-        return jsonify({'error': 'Certificate record not found.'}), 404
-
-    is_paid = bool(cert.get('is_verified_paid'))
-    if not is_paid:
-        pmt = query_db("""
-            SELECT * FROM payments 
-            WHERE user_id = ? AND (certificate_id = ? OR certificate_id = ? OR certificate_id = ?) AND status = 'paid'
-        """, (cert['user_id'], cert['id'], cert.get('application_id'), clean_id), one=True)
-        if pmt:
-            is_paid = True
-
-    if not is_paid:
-        return jsonify({'error': 'Payment of ₹199 is required before emailing certificate.'}), 402
-
-    date_str = datetime.datetime.now().strftime("%B %d, %Y")
-    cert_id_str = cert.get('certificate_id') or cert['id']
-    eff_college = cert.get('master_college') or cert.get('student_college')
-    eff_dept = cert.get('master_dept') or cert.get('student_dept')
-    verify_url = f"https://webintern.in/verify/{cert_id_str}"
-
-    pdf_bytes = generate_certificate_pdf(
-        student_name=cert['student_name'],
-        internship_title=cert['internship_title'],
-        date_str=date_str,
-        cert_id=cert_id_str,
-        is_verified=True,
-        college_name=eff_college,
-        department=eff_dept,
-        guide_name=cert.get('guide_name') or "Dr. A. K. Sharma",
-        project_name=cert.get('project_name') or f"{cert['internship_title']} Capstone",
-        start_date=cert.get('start_date'),
-        end_date=cert.get('end_date'),
-        company_name=cert.get('company_name') or "Web Intern Platform",
-        verification_url=verify_url
-    )
-
-    from utils.email_service import send_certificate_email
-    email_ok, email_res = send_certificate_email(
-        to_email=cert['student_email'],
-        student_name=cert['student_name'],
-        internship_title=cert['internship_title'],
-        cert_id=cert_id_str,
-        pdf_bytes=pdf_bytes,
-        start_date=cert.get('start_date'),
-        end_date=cert.get('end_date'),
-        verification_url=verify_url
-    )
+        WHERE c.id = ? OR a.certificate_id = ?
+    """, (cert_id, cert_id))
+    
+    row = cursor.fetchone()
+    
+    if not row:
+        # Check master record fallback
+        cursor.execute("SELECT * FROM master_internships WHERE certificate_id = ?", (cert_id,))
+        master_row = cursor.fetchone()
+        if master_row:
+            conn.close()
+            return jsonify({
+                'is_valid': True,
+                'certificate_id': cert_id,
+                'student_name': master_row['student_full_name'],
+                'college_name': master_row['college_name'],
+                'internship_title': master_row['internship_position'],
+                'start_date': master_row['internship_start_date'],
+                'end_date': master_row['internship_end_date'],
+                'guide_name': master_row['mentor_name'],
+                'is_verified_paid': True,
+                'verification_authority': 'Web Intern Academic Board & MSME ISO Standard',
+                'status': 'VERIFIED CREDENTIAL'
+            }), 200
+        else:
+            conn.close()
+            return jsonify({'is_valid': False, 'error': 'Invalid Certificate ID'}), 404
+            
+    cert_data = dict(row)
+    conn.close()
+    
+    # Check if end date passed or completed
+    is_ended = False
+    if cert_data.get('completion_status') == 'completed':
+        is_ended = True
+    elif cert_data.get('end_date'):
+        try:
+            end_dt = datetime.datetime.strptime(cert_data['end_date'], "%B %d, %Y").date()
+            is_ended = (datetime.date.today() >= end_dt)
+        except Exception:
+            is_ended = True
+    else:
+        is_ended = True
+        
+    if not cert_data['is_verified_paid']:
+        status_text = 'PENDING VERIFICATION FEE'
+    elif not is_ended:
+        status_text = f"VERIFIED FEE PAID (RELEASED ON END DATE: {cert_data['end_date']})"
+    else:
+        status_text = 'VERIFIED CREDENTIAL'
 
     return jsonify({
-        'message': f'Certificate PDF emailed successfully to {cert["student_email"]}',
-        'email_sent': email_ok,
-        'email_data': email_res
+        'is_valid': True,
+        'certificate_id': cert_data['id'],
+        'student_name': cert_data['student_name'],
+        'student_email': cert_data['student_email'],
+        'college_name': cert_data['college'] or 'University Student',
+        'internship_title': cert_data['internship_title'],
+        'start_date': cert_data['start_date'],
+        'end_date': cert_data['end_date'],
+        'guide_name': cert_data['guide_name'],
+        'is_verified_paid': bool(cert_data['is_verified_paid']),
+        'is_tenure_completed': is_ended,
+        'issued_at': cert_data['issued_at'],
+        'verification_authority': 'Web Intern Academic Board & MSME ISO Standard',
+        'status': status_text
     }), 200
 
+@certificate_bp.route('/api/certificates/<cert_id>/pdf', methods=['GET'])
+def download_certificate_pdf(cert_id):
+    import datetime
+    conn = get_db_connection()
+    cursor = conn.cursor()
+    
+    cursor.execute("""
+        SELECT c.*, a.start_date, a.end_date, a.completion_status,
+               p.full_name as student_name,
+               i.title as internship_title
+        FROM certificates c
+        JOIN applications a ON c.application_id = a.id
+        JOIN profiles p ON a.user_id = p.id
+        JOIN internships i ON a.internship_id = i.id
+        WHERE c.id = ? OR a.certificate_id = ?
+    """, (cert_id, cert_id))
+    
+    row = cursor.fetchone()
+    if not row:
+        conn.close()
+        return jsonify({'error': 'Certificate record not found'}), 404
+        
+    c_info = dict(row)
+    conn.close()
+
+    # Tenure completion check: must be after end_date or completion_status == 'completed'
+    is_ended = False
+    if c_info.get('completion_status') == 'completed':
+        is_ended = True
+    elif c_info.get('end_date'):
+        try:
+            end_dt = datetime.datetime.strptime(c_info['end_date'], "%B %d, %Y").date()
+            is_ended = (datetime.date.today() >= end_dt)
+        except Exception:
+            is_ended = True
+    else:
+        is_ended = True
+
+    if not c_info.get('is_verified_paid'):
+        return jsonify({
+            'error': 'Certificate is locked. Please unlock your official verified certificate by paying ₹199 via Razorpay.',
+            'code': 'FEE_NOT_PAID',
+            'is_verified_paid': False
+        }), 403
+
+    if not is_ended:
+        return jsonify({
+            'error': f"Certificate will be available upon completion of your internship tenure on {c_info['end_date']}.",
+            'code': 'TENURE_NOT_ENDED',
+            'end_date': c_info['end_date'],
+            'is_verified_paid': True
+        }), 403
+
+    pdf_path = generate_certificate_pdf(
+        student_name=c_info['student_name'],
+        internship_title=c_info['internship_title'],
+        start_date=c_info['start_date'],
+        end_date=c_info['end_date'],
+        cert_id=cert_id,
+        is_paid=True
+    )
+
+    
+    return send_file(pdf_path, mimetype='application/pdf', as_attachment=False, download_name=f"Certificate_{cert_id}.pdf")

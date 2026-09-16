@@ -1,28 +1,43 @@
 from flask import Blueprint, jsonify
-from database import query_db
+from database import get_db_connection
 
 sector_bp = Blueprint('sector_bp', __name__)
 
 @sector_bp.route('/api/sectors', methods=['GET'])
-@sector_bp.route('/sectors', methods=['GET'])
 def get_sectors():
-    sectors = query_db("SELECT * FROM sectors ORDER BY name ASC")
-    for sec in sectors:
-        count_res = query_db("SELECT COUNT(*) as count FROM internships WHERE sector_id = ?", (sec['id'],), one=True)
-        sec['internships_count'] = count_res['count'] if count_res else 0
+    conn = get_db_connection()
+    cursor = conn.cursor()
+    
+    cursor.execute("""
+        SELECT s.*, COUNT(i.id) as internship_count
+        FROM sectors s
+        LEFT JOIN internships i ON s.id = i.sector_id AND i.active = 1
+        GROUP BY s.id
+        ORDER BY s.name ASC
+    """)
+    rows = cursor.fetchall()
+    sectors = [dict(r) for r in rows]
+    conn.close()
+    
     return jsonify({'sectors': sectors}), 200
 
 @sector_bp.route('/api/sectors/<slug>', methods=['GET'])
-@sector_bp.route('/sectors/<slug>', methods=['GET'])
 def get_sector_by_slug(slug):
-    sector = query_db("SELECT * FROM sectors WHERE slug = ?", (slug,), one=True)
+    conn = get_db_connection()
+    cursor = conn.cursor()
+    
+    cursor.execute("SELECT * FROM sectors WHERE slug = ?", (slug,))
+    sector = cursor.fetchone()
+    
     if not sector:
-        return jsonify({'error': 'Sector not found.'}), 404
+        conn.close()
+        return jsonify({'error': 'Sector not found'}), 404
         
-    internships = query_db("SELECT * FROM internships WHERE sector_id = ? ORDER BY created_at DESC", (sector['id'],))
-    for item in internships:
-        item['sector_name'] = sector['name']
-        item['sector_slug'] = sector['slug']
-        
-    sector['internships'] = internships
-    return jsonify({'sector': sector}), 200
+    cursor.execute("SELECT * FROM internships WHERE sector_id = ? AND active = 1 ORDER BY title ASC", (sector['id'],))
+    internships = [dict(r) for r in cursor.fetchall()]
+    
+    conn.close()
+    return jsonify({
+        'sector': dict(sector),
+        'internships': internships
+    }), 200
