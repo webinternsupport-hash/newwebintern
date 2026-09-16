@@ -24,10 +24,21 @@ from utils.logger import log_info, log_success
 def create_app():
     app = Flask(__name__, static_folder='static', static_url_path='/static')
     app.config.from_object(Config)
-    Config.init_app(app)
     
-    # Initialize Database Schema
-    init_db()
+    try:
+        Config.init_app(app)
+    except Exception as e:
+        print(f"WARNING: Config.init_app() failed: {e}", file=sys.stderr)
+        import traceback
+        traceback.print_exc(file=sys.stderr)
+    
+    try:
+        # Initialize Database Schema
+        init_db()
+    except Exception as e:
+        print(f"WARNING: init_db() failed: {e}", file=sys.stderr)
+        import traceback
+        traceback.print_exc(file=sys.stderr)
     
     # Register Blueprints
     app.register_blueprint(auth_bp)
