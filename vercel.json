@@ -1,8 +1,20 @@
 {
-  "rewrites": [
+  "buildCommand": "pip install -r requirements.txt",
+  "outputDirectory": "static",
+  "functions": {
+    "api/index.py": {
+      "maxDuration": 30,
+      "memory": 512
+    }
+  },
+  "routes": [
     {
-      "source": "/(.*)",
-      "destination": "/api/index.py"
+      "src": "/static/(.*)",
+      "dest": "/static/$1"
+    },
+    {
+      "src": "/(.*)",
+      "dest": "/api/index.py"
     }
   ]
 }
