@@ -269,11 +269,13 @@ export async function renderDashboardView(defaultTab = 'internships') {
           <!-- Link Sharing Box -->
           <div style="background-color: var(--bg-main); border: 2px dashed var(--primary); border-radius: var(--radius-md); padding: 24px; text-align: center; margin-bottom: 28px;">
             <span class="badge badge-primary mb-2">Your Unique Referral Link</span>
-            <div style="display: flex; gap: 10px; justify-content: center; align-items: center; max-width: 620px; margin: 12px auto;">
-              <input type="text" id="ref-link-input" readonly value="${referralData?.referral_link || ''}" class="form-control" style="font-family: monospace; font-weight: 700; text-align: center; font-size: 0.95rem; background: white; border: 1px solid var(--border-color);"/>
+            <div style="display: flex; gap: 10px; justify-content: center; align-items: center; max-width: 620px; margin: 12px auto; flex-wrap: wrap;">
+              <input type="text" id="ref-link-input" readonly value="${referralData?.referral_link || ''}" class="form-control" style="font-family: monospace; font-weight: 700; text-align: center; font-size: 0.95rem; background: white; border: 1px solid var(--border-color); flex: 1; min-width: 240px;"/>
               <button id="copy-ref-link-btn" class="btn btn-primary" style="white-space: nowrap;">📋 Copy Link</button>
+              <button id="copy-ref-msg-btn" class="btn btn-outline" style="white-space: nowrap; border-color: var(--primary); color: var(--primary);">💬 Copy Full Message</button>
             </div>
             <div id="copy-toast" style="font-size: 0.85rem; color: var(--success); font-weight: 700; margin-top: 6px; display: none;">✓ Referral Link Copied to Clipboard!</div>
+            <div id="copy-msg-toast" style="font-size: 0.85rem; color: var(--success); font-weight: 700; margin-top: 6px; display: none;">✓ Complete Share Message Copied to Clipboard!</div>
 
             <!-- Social Media Buttons -->
             <div style="display: flex; gap: 12px; justify-content: center; flex-wrap: wrap; margin-top: 18px;">
@@ -404,6 +406,19 @@ export async function renderDashboardView(defaultTab = 'internships') {
         linkInput.select();
         navigator.clipboard.writeText(linkInput.value);
         const toast = container.querySelector('#copy-toast');
+        if (toast) {
+          toast.style.display = 'block';
+          setTimeout(() => { toast.style.display = 'none'; }, 3000);
+        }
+      }
+    });
+
+    // Copy Full Referral Message Listener
+    container.querySelector('#copy-ref-msg-btn')?.addEventListener('click', () => {
+      const fullMsg = referralData?.share_message || container.querySelector('#ref-link-input')?.value || '';
+      if (fullMsg) {
+        navigator.clipboard.writeText(fullMsg);
+        const toast = container.querySelector('#copy-msg-toast');
         if (toast) {
           toast.style.display = 'block';
           setTimeout(() => { toast.style.display = 'none'; }, 3000);

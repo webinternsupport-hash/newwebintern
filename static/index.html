@@ -2,8 +2,18 @@
 <html lang="en">
 <head>
   <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
   <title>Web Intern - Virtual Internship & Certification Platform</title>
+
+  <!-- PWA & Mobile Web App Meta Tags -->
+  <meta name="mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+  <meta name="apple-mobile-web-app-title" content="WebIntern">
+  <meta name="theme-color" content="#2563eb">
+  <link rel="manifest" href="/manifest.json">
+  <link rel="apple-touch-icon" href="/static/assets/webintern_unique_logo.png">
+
   <link rel="stylesheet" href="/static/css/main.css">
   <link rel="stylesheet" href="/static/css/components.css">
   <link rel="stylesheet" href="/static/css/mobile-app.css">
@@ -32,7 +42,13 @@
       <div class="header-actions">
         <a href="#/login" class="btn btn-outline btn-sm" id="auth-header-btn">Sign In</a>
         <button class="btn btn-outline btn-sm" id="header-logout-btn" style="display: none; margin-left: 8px; color: var(--danger, #ef4444); border-color: var(--danger, #ef4444); font-weight: 600;">🚪 Log Out</button>
-        <button class="menu-toggle" id="drawer-toggle-btn" aria-label="Toggle Navigation">☰</button>
+        <button class="menu-toggle" id="drawer-toggle-btn" aria-label="Toggle Navigation">
+          <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round">
+            <line x1="4" y1="6" x2="20" y2="6"></line>
+            <line x1="4" y1="12" x2="20" y2="12"></line>
+            <line x1="4" y1="18" x2="20" y2="18"></line>
+          </svg>
+        </button>
       </div>
     </div>
   </header>
@@ -45,7 +61,12 @@
         <img src="/static/assets/webintern_unique_logo.png" alt="WebIntern Logo" style="height: 32px; width: auto; object-fit: contain;">
         <span>Web<span class="highlight">Intern</span></span>
       </a>
-      <button class="close-modal" id="drawer-close-btn">&times;</button>
+      <button class="close-modal" id="drawer-close-btn" aria-label="Close Navigation">
+        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round">
+          <line x1="18" y1="6" x2="6" y2="18"></line>
+          <line x1="6" y1="6" x2="18" y2="18"></line>
+        </svg>
+      </button>
     </div>
     <div class="drawer-links">
       <a href="#/" class="drawer-link">🏠 Home</a>
@@ -73,13 +94,23 @@
       <span class="tab-icon">🔍</span>
       <span>Explore</span>
     </a>
+    <a href="#/referrals" class="app-bar-tab" id="bar-tab-referrals">
+      <span class="tab-icon">🎁</span>
+      <span>Refer</span>
+    </a>
     <a href="#/dashboard" class="app-bar-tab" id="bar-tab-profile">
       <span class="tab-icon">💼</span>
-      <span>Dashboard</span>
+      <span>Portal</span>
     </a>
     <button class="app-bar-tab" id="bar-tab-more" style="background: none; border: none; cursor: pointer;">
-      <span class="tab-icon">☰</span>
-      <span>More</span>
+      <span class="tab-icon" style="display: flex; align-items: center; justify-content: center;">
+        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round">
+          <line x1="4" y1="6" x2="20" y2="6"></line>
+          <line x1="4" y1="12" x2="20" y2="12"></line>
+          <line x1="4" y1="18" x2="20" y2="18"></line>
+        </svg>
+      </span>
+      <span>Menu</span>
     </button>
   </nav>
 

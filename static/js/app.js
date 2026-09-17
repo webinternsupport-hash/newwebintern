@@ -79,7 +79,7 @@ class App {
         authBtn.className = 'btn btn-primary btn-sm';
       }
       if (headerLogoutBtn) {
-        headerLogoutBtn.style.display = 'inline-block';
+        headerLogoutBtn.style.display = 'inline-flex';
         headerLogoutBtn.onclick = () => this.logout();
       }
       if (drawerLoginLink) {
@@ -185,7 +185,7 @@ class App {
     window.scrollTo(0, 0);
 
     // Active bottom bar tab highlighting
-    const tabs = ['home', 'explore', 'profile'];
+    const tabs = ['home', 'explore', 'referrals', 'profile'];
     tabs.forEach(t => {
       const el = document.getElementById(`bar-tab-${t}`);
       if (el) el.classList.remove('active');
@@ -218,7 +218,7 @@ class App {
       document.getElementById('bar-tab-profile')?.classList.add('active');
       view = await renderDashboardView('internships');
     } else if (hash === '#/referrals' || hash.startsWith('#/refer')) {
-      document.getElementById('bar-tab-profile')?.classList.add('active');
+      document.getElementById('bar-tab-referrals')?.classList.add('active');
       view = await renderDashboardView('referrals');
     } else if (hash === '#/login') {
       view = renderLoginView();
@@ -264,7 +264,13 @@ export function showToast(message, type = 'info') {
 
 window.showToast = showToast;
 
-// Initialize Application
+// Initialize Application & PWA Service Worker
 document.addEventListener('DOMContentLoaded', () => {
   window.app = new App();
+
+  if ('serviceWorker' in navigator) {
+    navigator.serviceWorker.register('/sw.js').catch(err => {
+      console.log('PWA ServiceWorker registration info:', err);
+    });
+  }
 });

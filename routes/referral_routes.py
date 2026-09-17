@@ -70,10 +70,28 @@ def get_my_referral_stats():
     app_base_url = Config.APP_URL.rstrip('/')
     referral_link = f"{app_base_url}/#/register?ref={ref_code}"
     
-    share_msg = f"Join me on Web Intern Platform for free 4-week virtual internships & MSME recognized certificates! Register using my official referral link: {referral_link}"
+    share_msg = f"""🎓 100% FREE INTERNSHIP OPPORTUNITY FOR STUDENTS! 🚀
+
+Hey everyone! 👋
+Looking for an internship to gain real-world experience, improve your skills, and strengthen your resume? 💼🌟
+
+Check out Web Intern! 💻✨
+✨ 100% FREE Internship
+📜 Get your Offer Letter instantly by email
+🧠 Learn and gain practical experience
+🎓 Student-friendly internship opportunities
+🥇 Certificate available after completing the required eligibility/process
+🚀 Quick & easy online process
+⚡ No complicated application process
+
+Join Web Intern here: 👇
+{referral_link}
+
+If you're a college student looking for an internship, definitely check it out and share it with your friends! 🌟
+Start your internship journey today! 🔥💪"""
     
     whatsapp_url = f"https://api.whatsapp.com/send?text={quote(share_msg)}"
-    telegram_url = f"https://t.me/share/url?url={quote(referral_link)}&text={quote('Join me on Web Intern Platform for free virtual internships & MSME certificates!')}"
+    telegram_url = f"https://t.me/share/url?url={quote(referral_link)}&text={quote(share_msg)}"
     
     conn.close()
     

@@ -332,11 +332,24 @@
 }
 
 .close-modal {
-  background: none;
-  border: none;
-  font-size: 1.5rem;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 36px;
+  height: 36px;
+  border-radius: 50%;
+  background-color: var(--bg-main, #f1f5f9);
+  border: 1px solid var(--border-color, #e2e8f0);
   cursor: pointer;
-  color: var(--text-muted);
+  color: var(--text-muted, #64748b);
+  transition: all 0.2s ease;
+  padding: 0;
+}
+
+.close-modal:active {
+  transform: scale(0.92);
+  background-color: var(--danger-light, #fef2f2);
+  color: var(--danger, #dc2626);
 }
 
 /* Forms */

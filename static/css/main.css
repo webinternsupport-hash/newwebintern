@@ -148,17 +148,30 @@ a:hover {
 .header-actions {
   display: flex;
   align-items: center;
-  gap: 12px;
+  gap: 8px;
 }
 
 .menu-toggle {
   display: flex;
-  background: none;
-  border: none;
-  font-size: 1.5rem;
-  color: var(--text-main);
+  align-items: center;
+  justify-content: center;
+  width: 40px;
+  height: 40px;
+  border-radius: 12px;
+  background-color: var(--bg-main, #f1f5f9);
+  border: 1px solid var(--border-color, #e2e8f0);
+  color: var(--text-main, #0f172a);
   cursor: pointer;
-  padding: 4px;
+  padding: 0;
+  margin-left: 4px;
+  flex-shrink: 0;
+  transition: all 0.2s cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+.menu-toggle:active {
+  transform: scale(0.92);
+  background-color: var(--primary-light, #eff6ff);
+  color: var(--primary, #2563eb);
 }
 
 @media (min-width: 769px) {

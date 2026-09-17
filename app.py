@@ -63,10 +63,18 @@ def create_app():
             import traceback
             traceback.print_exc(file=sys.stderr)
     
-    # Serve SPA index
+    # Serve SPA index & PWA Assets
     @app.route('/')
     def index():
         return send_from_directory('static', 'index.html')
+
+    @app.route('/manifest.json')
+    def manifest():
+        return send_from_directory('static', 'manifest.json')
+
+    @app.route('/sw.js')
+    def service_worker():
+        return send_from_directory('static', 'sw.js')
 
     @app.route('/api/health', methods=['GET'])
     def health_check():
