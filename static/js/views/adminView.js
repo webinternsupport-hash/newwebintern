@@ -28,11 +28,11 @@ export async function renderAdminView() {
         <form id="admin-login-form">
           <div class="form-group">
             <label class="form-label">Admin Email</label>
-            <input type="email" id="admin-email" class="form-control" value="admin@webintern.com" required/>
+            <input type="email" id="admin-email" class="form-control" placeholder="admin@webintern.com" required/>
           </div>
           <div class="form-group">
             <label class="form-label">Password</label>
-            <input type="password" id="admin-password" class="form-control" value="WebInternAdmin#2026!" required/>
+            <input type="password" id="admin-password" class="form-control" placeholder="••••••••" required/>
           </div>
           <div id="admin-login-err" style="color: var(--danger); font-size: 0.85rem; margin-bottom: 16px; display: none;"></div>
           <button type="submit" class="btn btn-primary btn-block">Log In as Admin</button>

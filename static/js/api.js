@@ -147,6 +147,18 @@ export const API = {
     });
   },
 
+  // Referrals
+  async getReferralStats() {
+    return await this.request('/api/referrals/my-stats');
+  },
+
+  async claimReferralReward(payload) {
+    return await this.request('/api/referrals/claim-reward', {
+      method: 'POST',
+      body: JSON.stringify(payload)
+    });
+  },
+
   // Admin
   async adminLogin(credentials) {
     const res = await this.request('/api/admin/login', {

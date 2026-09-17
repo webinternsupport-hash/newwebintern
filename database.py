@@ -74,9 +74,19 @@ def _init_db_tables():
       google_account_id TEXT,
       sync_enabled BOOLEAN DEFAULT TRUE,
       last_sync_time TIMESTAMP,
+      referral_code TEXT UNIQUE,
       created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
     );
     """)
+
+    # Check and add referral_code column if missing on existing SQLite database
+    cursor.execute("PRAGMA table_info(profiles);")
+    cols = [col[1] for col in cursor.fetchall()]
+    if 'referral_code' not in cols:
+        try:
+            cursor.execute("ALTER TABLE profiles ADD COLUMN referral_code TEXT;")
+        except Exception as e:
+            pass
 
     # 2. Admins
     cursor.execute("""
@@ -377,9 +387,24 @@ def _init_db_tables():
     );
     """)
 
+    # 21. Referrals (Tracking Student Invitations & Enrolments)
+    cursor.execute("""
+    CREATE TABLE IF NOT EXISTS referrals (
+      id VARCHAR(36) PRIMARY KEY,
+      referrer_user_id VARCHAR(36) REFERENCES profiles(id) ON DELETE CASCADE,
+      referred_user_id VARCHAR(36) REFERENCES profiles(id) ON DELETE CASCADE,
+      referral_code TEXT NOT NULL,
+      status TEXT DEFAULT 'registered',
+      application_id VARCHAR(36) REFERENCES applications(id),
+      created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+      enrolled_at TIMESTAMP
+    );
+    """)
+
     # Create Indexes
     cursor.execute("CREATE INDEX IF NOT EXISTS idx_applications_user ON applications(user_id);")
     cursor.execute("CREATE INDEX IF NOT EXISTS idx_applications_internship ON applications(internship_id);")
+    cursor.execute("CREATE INDEX IF NOT EXISTS idx_referrals_referrer ON referrals(referrer_user_id);")
     cursor.execute("CREATE INDEX IF NOT EXISTS idx_submissions_app ON submissions(application_id);")
     cursor.execute("CREATE INDEX IF NOT EXISTS idx_certificates_app ON certificates(application_id);")
     cursor.execute("CREATE INDEX IF NOT EXISTS idx_documents_student ON documents(student_id);")

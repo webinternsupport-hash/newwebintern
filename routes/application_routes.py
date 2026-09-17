@@ -138,6 +138,13 @@ def create_application():
         ) VALUES (?, ?, ?, 'OFFER_LETTER', ?, ?, 'ISSUED', 'SENT')
     """, (doc_id, app_id, actual_user_id, offer_doc_num, pdf_path))
 
+    # 6. Update Referral Status to 'enrolled' if referee was registered
+    cursor.execute("""
+        UPDATE referrals 
+        SET status = 'enrolled', application_id = ?, enrolled_at = CURRENT_TIMESTAMP
+        WHERE referred_user_id = ? AND status = 'registered'
+    """, (app_id, actual_user_id))
+
     conn.commit()
     
     # Sync application, certificate, master internship, document to Supabase PostgREST in non-blocking background thread

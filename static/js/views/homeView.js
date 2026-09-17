@@ -25,7 +25,7 @@ export async function renderHomeView() {
           Gain hands-on industry capstone experience across 20+ domains. Apply instantly for free, receive automated PDF Offer Letters, submit weekly projects, and earn verified credentials.
         </p>
         <div style="display: flex; gap: 12px; justify-content: center; flex-wrap: wrap;">
-          <a href="#/explore" class="btn btn-primary btn-lg">Explore 20+ Programs</a>
+          <a href="#/explore" class="btn btn-primary btn-lg">Explore 200+ Programs</a>
           <a href="#/register" class="btn btn-outline btn-lg">Student Registration</a>
         </div>
 

@@ -1,6 +1,6 @@
 import { API } from '../api.js';
 
-export async function renderDashboardView() {
+export async function renderDashboardView(defaultTab = 'internships') {
   const container = document.createElement('div');
   container.className = 'container';
   container.style.padding = '40px 16px';
@@ -15,6 +15,59 @@ export async function renderDashboardView() {
     const appRes = await API.getMyApplications();
     enrollments = appRes.applications || [];
   } catch (e) {
+    if (defaultTab === 'referrals') {
+      container.innerHTML = `
+        <div style="max-width: 760px; margin: 0 auto;">
+          <!-- Guest Refer & Earn Banner -->
+          <div class="card" style="border: 2px solid var(--primary); box-shadow: var(--shadow-lg); text-align: center; padding: 40px 24px; margin-bottom: 30px;">
+            <div style="font-size: 3.5rem; margin-bottom: 12px;">🎁</div>
+            <span class="badge badge-accent mb-2">Web Intern Referral Program</span>
+            <h1 style="font-size: 2.2rem; font-weight: 800; margin-top: 8px; color: var(--secondary);">Refer Friends & Earn Free Verified Certificates</h1>
+            <p style="color: var(--text-muted); font-size: 1.05rem; max-width: 600px; margin: 12px auto 24px auto;">
+              Share Web Intern with your college friends & classmates. Earn <strong>100% Free MSME Recognized Certificates</strong> for every 3 friends who enroll in virtual internship tracks!
+            </p>
+
+            <div style="display: flex; gap: 12px; justify-content: center; flex-wrap: wrap;">
+              <a href="#/register" class="btn btn-primary btn-lg">🚀 Create Account & Get Referral Link</a>
+              <a href="#/login" class="btn btn-outline btn-lg">🔑 Sign In to View Your Link</a>
+            </div>
+          </div>
+
+          <!-- Policy Notice -->
+          <div style="background-color: #f0fdf4; border: 1px solid #bbf7d0; border-radius: var(--radius-md); padding: 18px; margin-bottom: 30px; display: flex; gap: 14px; align-items: center;">
+            <div style="font-size: 2rem;">💡</div>
+            <div>
+              <h4 style="font-weight: 700; color: #166534; margin-bottom: 2px;">How Referral Rewards Work</h4>
+              <p style="font-size: 0.85rem; color: #15803d; margin: 0; line-height: 1.4;">
+                Sharing your link or friend registration alone does not grant free certificates. Rewards are unlocked after your referred friends complete their internship enrollment.
+              </p>
+            </div>
+          </div>
+
+          <!-- 3-Step Guide Grid -->
+          <h3 style="font-size: 1.4rem; font-weight: 800; text-align: center; margin-bottom: 20px;">Simple 3-Step Program</h3>
+          <div class="grid grid-cols-3">
+            <div class="card" style="text-align: center;">
+              <div style="font-size: 2rem; font-weight: 900; color: var(--primary); margin-bottom: 8px;">01</div>
+              <h4 style="font-weight: 700; margin-bottom: 6px;">Get WIREF Link</h4>
+              <p style="font-size: 0.85rem; color: var(--text-muted);">Register free to generate your personal WIREF referral code & share link.</p>
+            </div>
+            <div class="card" style="text-align: center;">
+              <div style="font-size: 2rem; font-weight: 900; color: var(--primary); margin-bottom: 8px;">02</div>
+              <h4 style="font-weight: 700; margin-bottom: 6px;">Share on Social</h4>
+              <p style="font-size: 0.85rem; color: var(--text-muted);">Share your link with WhatsApp groups, Telegram channels & classmates.</p>
+            </div>
+            <div class="card" style="text-align: center;">
+              <div style="font-size: 2rem; font-weight: 900; color: var(--primary); margin-bottom: 8px;">03</div>
+              <h4 style="font-weight: 700; margin-bottom: 6px;">Earn Reward</h4>
+              <p style="font-size: 0.85rem; color: var(--text-muted);">When 3 friends enroll, claim your 100% free verified certificate unlock!</p>
+            </div>
+          </div>
+        </div>
+      `;
+      return container;
+    }
+
     container.innerHTML = `
       <div style="text-align: center; padding: 60px 0;">
         <h2>Please Sign In to Access Your Student Dashboard</h2>
@@ -24,10 +77,27 @@ export async function renderDashboardView() {
     return container;
   }
 
-  let activeTab = 'internships'; // 'internships' or 'documents'
+  let activeTab = defaultTab || 'internships'; // 'internships', 'documents', or 'referrals'
   let activeWorkspaceApp = null; // when workspace modal is open
+  let referralData = null;
 
-  function renderUI() {
+  if (activeTab === 'referrals') {
+    try {
+      referralData = await API.getReferralStats();
+    } catch (e) {
+      console.warn('Error fetching referral stats:', e);
+    }
+  }
+
+  async function loadReferrals() {
+    try {
+      referralData = await API.getReferralStats();
+    } catch (e) {
+      console.warn('Error fetching referral stats:', e);
+    }
+  }
+
+  async function renderUI() {
     container.innerHTML = `
       <!-- Welcome Banner -->
       <div style="background: linear-gradient(135deg, var(--secondary), #1e293b); color: white; border-radius: var(--radius-lg); padding: 32px; margin-bottom: 30px; display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 16px;">
@@ -50,6 +120,9 @@ export async function renderDashboardView() {
         <button class="tab-btn ${activeTab === 'documents' ? 'active' : ''}" id="tab-documents">
           📄 Issued Documents & Certificates
         </button>
+        <button class="tab-btn ${activeTab === 'referrals' ? 'active' : ''}" id="tab-referrals">
+          🎁 Refer & Earn (Free Certificate)
+        </button>
       </div>
 
       <!-- Tab Content: My Internships -->
@@ -58,8 +131,7 @@ export async function renderDashboardView() {
           <div style="text-align: center; padding: 60px 0; background: white; border-radius: var(--radius-lg); border: 1px solid var(--border-color);">
             <div style="font-size: 3rem; margin-bottom: 12px;">💼</div>
             <h3>No active internship enrollments yet</h3>
-            <p style="color: var(--text-muted); margin-bottom: 16px;">Apply for a free 4-week virtual internship program to receive your instant offer letter.</p>
-            <a href="#/explore" class="btn btn-primary">Browse Internship Programs</a>
+            <p style="color: var(--text-muted); margin-bottom: 8px;">Use the <strong>+ Explore New Internships</strong> button above to browse and enroll in a free 4-week virtual program.</p>
           </div>
         ` : `
           <div class="grid grid-cols-2">
@@ -178,6 +250,119 @@ export async function renderDashboardView() {
         </div>
       ` : ''}
 
+      <!-- Tab Content: Refer & Earn -->
+      ${activeTab === 'referrals' ? `
+        <div class="card">
+          <!-- Policy Banner -->
+          <div style="background-color: #f0fdf4; border: 1px solid #bbf7d0; border-radius: var(--radius-md); padding: 16px; margin-bottom: 24px; display: flex; gap: 14px; align-items: center;">
+            <div style="font-size: 2.2rem;">💡</div>
+            <div>
+              <h4 style="font-weight: 700; color: #166534; margin-bottom: 2px;">How Refer & Earn Works</h4>
+              <p style="font-size: 0.85rem; color: #15803d; margin: 0; line-height: 1.4;">
+                Share your unique link via WhatsApp, Telegram, or Copy Link. 
+                <strong>Note: Sharing or registration alone does NOT grant free certificates.</strong> 
+                Rewards (100% Free Verified Certificate) are unlocked once 3 referred friends complete their internship enrollment!
+              </p>
+            </div>
+          </div>
+
+          <!-- Link Sharing Box -->
+          <div style="background-color: var(--bg-main); border: 2px dashed var(--primary); border-radius: var(--radius-md); padding: 24px; text-align: center; margin-bottom: 28px;">
+            <span class="badge badge-primary mb-2">Your Unique Referral Link</span>
+            <div style="display: flex; gap: 10px; justify-content: center; align-items: center; max-width: 620px; margin: 12px auto;">
+              <input type="text" id="ref-link-input" readonly value="${referralData?.referral_link || ''}" class="form-control" style="font-family: monospace; font-weight: 700; text-align: center; font-size: 0.95rem; background: white; border: 1px solid var(--border-color);"/>
+              <button id="copy-ref-link-btn" class="btn btn-primary" style="white-space: nowrap;">📋 Copy Link</button>
+            </div>
+            <div id="copy-toast" style="font-size: 0.85rem; color: var(--success); font-weight: 700; margin-top: 6px; display: none;">✓ Referral Link Copied to Clipboard!</div>
+
+            <!-- Social Media Buttons -->
+            <div style="display: flex; gap: 12px; justify-content: center; flex-wrap: wrap; margin-top: 18px;">
+              <a href="${referralData?.whatsapp_share_url || '#'}" target="_blank" class="btn" style="background-color: #25D366; color: white; border: none; font-weight: 600; display: flex; gap: 8px; align-items: center; padding: 10px 18px;">
+                <span style="font-size: 1.2rem;">💬</span> Share on WhatsApp
+              </a>
+              <a href="${referralData?.telegram_share_url || '#'}" target="_blank" class="btn" style="background-color: #0088cc; color: white; border: none; font-weight: 600; display: flex; gap: 8px; align-items: center; padding: 10px 18px;">
+                <span style="font-size: 1.2rem;">✈️</span> Share on Telegram
+              </a>
+            </div>
+          </div>
+
+          <!-- Stats Grid -->
+          <div class="grid grid-cols-3" style="margin-bottom: 28px;">
+            <div style="border: 1px solid var(--border-color); border-radius: var(--radius-md); padding: 20px; text-align: center; background-color: #f8fafc;">
+              <div style="font-size: 2.2rem; font-weight: 800; color: var(--secondary);">${referralData?.total_registered || 0}</div>
+              <div style="font-size: 0.85rem; color: var(--text-muted); font-weight: 600; margin-top: 4px;">Registered Friends</div>
+            </div>
+            <div style="border: 1px solid var(--border-color); border-radius: var(--radius-md); padding: 20px; text-align: center; background-color: #eff6ff;">
+              <div style="font-size: 2.2rem; font-weight: 800; color: var(--primary);">${referralData?.total_enrolled || 0} / ${referralData?.target_required || 3}</div>
+              <div style="font-size: 0.85rem; color: var(--text-muted); font-weight: 600; margin-top: 4px;">Active Enrolled Friends (Qualifying)</div>
+            </div>
+            <div style="border: 1px solid var(--border-color); border-radius: var(--radius-md); padding: 20px; text-align: center; background-color: ${referralData?.is_eligible_for_reward ? '#f0fdf4' : '#fff7ed'};">
+              <div style="font-size: 1.4rem; font-weight: 800; color: ${referralData?.is_eligible_for_reward ? 'var(--success)' : '#c2410c'}; margin-bottom: 4px;">
+                ${referralData?.is_eligible_for_reward ? '🎉 Reward Eligible' : '⏳ In Progress'}
+              </div>
+              <div style="font-size: 0.85rem; color: var(--text-muted);">
+                ${referralData?.is_eligible_for_reward ? 'Free Certificate Claim Available!' : `Need ${Math.max(0, (referralData?.target_required || 3) - (referralData?.total_enrolled || 0))} more enrolled friend(s)`}
+              </div>
+            </div>
+          </div>
+
+          <!-- Reward Claim Section -->
+          ${referralData?.is_eligible_for_reward ? `
+            <div style="background-color: #f0fdf4; border: 2px solid var(--success); border-radius: var(--radius-md); padding: 20px; text-align: center; margin-bottom: 28px;">
+              <h3 style="color: var(--success); font-weight: 800; margin-bottom: 8px;">🎉 Referral Reward Unlocked: 100% Free Verified Certificate!</h3>
+              <p style="color: var(--text-muted); font-size: 0.9rem; margin-bottom: 16px;">Select an active program to unlock your official verified certificate for free:</p>
+              
+              <div style="display: flex; gap: 12px; justify-content: center; max-width: 450px; margin: 0 auto;">
+                <select id="claim-cert-select" class="form-control">
+                  ${enrollments.map(app => `<option value="${app.certificate_id}">${app.internship_title}</option>`).join('')}
+                </select>
+                <button id="claim-reward-btn" class="btn btn-success" style="white-space: nowrap;">🎁 Claim Free Certificate</button>
+              </div>
+              <div id="claim-msg" style="margin-top: 10px; font-size: 0.85rem; font-weight: 600;"></div>
+            </div>
+          ` : ''}
+
+          <!-- Referred Friends Table -->
+          <h4 style="font-size: 1.15rem; font-weight: 700; margin-bottom: 14px;">Referred Friends Activity</h4>
+          ${(!referralData?.referees || referralData.referees.length === 0) ? `
+            <div style="text-align: center; padding: 40px 0; border: 1px solid var(--border-color); border-radius: var(--radius-md); background: #f8fafc;">
+              <div style="font-size: 2.5rem; margin-bottom: 8px;">👥</div>
+              <p style="color: var(--text-muted); font-weight: 600;">No friends have registered using your referral link yet.</p>
+              <p style="font-size: 0.85rem; color: var(--text-muted);">Share your link on WhatsApp or Telegram to start earning rewards!</p>
+            </div>
+          ` : `
+            <div style="overflow-x: auto;">
+              <table style="width: 100%; border-collapse: collapse; font-size: 0.9rem;">
+                <thead>
+                  <tr style="border-bottom: 2px solid var(--border-color); text-align: left; color: var(--text-muted);">
+                    <th style="padding: 12px;">Friend Name</th>
+                    <th style="padding: 12px;">Joined Date</th>
+                    <th style="padding: 12px;">Enrollment Status</th>
+                    <th style="padding: 12px; text-align: right;">Reward Credit</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  ${referralData.referees.map(rf => `
+                    <tr style="border-bottom: 1px solid var(--border-color);">
+                      <td style="padding: 12px; font-weight: 600;">${rf.referred_name}</td>
+                      <td style="padding: 12px; color: var(--text-muted);">${(rf.created_at || '').split('T')[0] || (rf.created_at || '').split(' ')[0]}</td>
+                      <td style="padding: 12px;">
+                        <span class="badge ${rf.status === 'enrolled' || rf.status === 'rewarded' ? 'badge-success' : 'badge-warning'}">
+                          ${rf.status === 'enrolled' || rf.status === 'rewarded' ? '✅ Enrolled in Internship' : 'Registered (Pending Enrollment)'}
+                        </span>
+                      </td>
+                      <td style="padding: 12px; text-align: right; font-weight: 700; color: ${rf.status === 'enrolled' || rf.status === 'rewarded' ? 'var(--success)' : 'var(--text-muted)'};">
+                        ${rf.status === 'enrolled' || rf.status === 'rewarded' ? '+1 Credit Counted' : '0 (Must Enroll)'}
+                      </td>
+                    </tr>
+                  `).join('')}
+                </tbody>
+              </table>
+            </div>
+          `}
+        </div>
+      ` : ''}
+
       <!-- Task Workspace Modal Container -->
       <div class="modal-backdrop" id="workspace-modal">
         <div class="modal-card">
@@ -205,6 +390,52 @@ export async function renderDashboardView() {
     container.querySelector('#tab-documents')?.addEventListener('click', () => {
       activeTab = 'documents';
       renderUI();
+    });
+    container.querySelector('#tab-referrals')?.addEventListener('click', async () => {
+      activeTab = 'referrals';
+      await loadReferrals();
+      renderUI();
+    });
+
+    // Copy Referral Link Listener
+    container.querySelector('#copy-ref-link-btn')?.addEventListener('click', () => {
+      const linkInput = container.querySelector('#ref-link-input');
+      if (linkInput) {
+        linkInput.select();
+        navigator.clipboard.writeText(linkInput.value);
+        const toast = container.querySelector('#copy-toast');
+        if (toast) {
+          toast.style.display = 'block';
+          setTimeout(() => { toast.style.display = 'none'; }, 3000);
+        }
+      }
+    });
+
+    // Claim Reward Listener
+    container.querySelector('#claim-reward-btn')?.addEventListener('click', async () => {
+      const selectEl = container.querySelector('#claim-cert-select');
+      const msgEl = container.querySelector('#claim-msg');
+      const claimBtn = container.querySelector('#claim-reward-btn');
+      
+      if (!selectEl || !selectEl.value) return;
+      
+      claimBtn.disabled = true;
+      claimBtn.textContent = 'Claiming...';
+      
+      try {
+        await API.claimReferralReward({ certificate_id: selectEl.value });
+        if (msgEl) msgEl.innerHTML = `<span style="color: var(--success);">🎉 Reward Claimed! Free Certificate Unlocked.</span>`;
+        alert('🎉 Reward Claimed Successfully! 100% Free Official Verified Certificate Unlocked.');
+        
+        const updatedApps = await API.getMyApplications();
+        enrollments = updatedApps.applications || [];
+        await loadReferrals();
+        renderUI();
+      } catch (err) {
+        claimBtn.disabled = false;
+        claimBtn.textContent = '🎁 Claim Free Certificate';
+        if (msgEl) msgEl.innerHTML = `<span style="color: var(--danger);">${err.message || 'Claim failed'}</span>`;
+      }
     });
 
     // Workspace Modal Listeners

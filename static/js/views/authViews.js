@@ -101,6 +101,14 @@ export function renderRegisterView() {
   container.style.padding = '50px 16px';
   container.style.maxWidth = '540px';
 
+  // Parse referral code from URL search or hash (e.g. #/register?ref=WIREF-12345)
+  const fullUrl = window.location.href;
+  let defaultRefCode = '';
+  const match = fullUrl.match(/[?&]ref=([A-Za-z0-9_-]+)/i);
+  if (match && match[1]) {
+    defaultRefCode = match[1].toUpperCase();
+  }
+
   container.innerHTML = `
     <div class="card">
       <div style="text-align: center; margin-bottom: 24px;">
@@ -135,6 +143,12 @@ export function renderRegisterView() {
             <label class="form-label">Degree / Department</label>
             <input type="text" id="reg-department" class="form-control" placeholder="B.Tech Computer Science"/>
           </div>
+        </div>
+
+        <div class="form-group">
+          <label class="form-label">Referral Code (Optional)</label>
+          <input type="text" id="reg-referral" class="form-control" placeholder="e.g. WIREF-123456" value="${defaultRefCode}" style="text-transform: uppercase; font-family: monospace; font-weight: 600; background-color: #f8fafc;"/>
+          <small style="color: var(--text-muted); font-size: 0.75rem;">If invited by a friend, enter their WIREF code above.</small>
         </div>
 
         <div class="form-group">
@@ -176,11 +190,12 @@ export function renderRegisterView() {
     const college = container.querySelector('#reg-college').value;
     const department = container.querySelector('#reg-department').value;
     const password = container.querySelector('#reg-password').value;
+    const referral_code = container.querySelector('#reg-referral').value.trim();
     const terms_accepted = container.querySelector('#reg-terms').checked;
 
     try {
       await API.register({
-        full_name, email, phone, college, department, password, terms_accepted
+        full_name, email, phone, college, department, password, referral_code, terms_accepted
       });
       if (window.app && typeof window.app.checkAuthSession === 'function') {
         await window.app.checkAuthSession();

@@ -31,19 +31,37 @@ def upload_submission():
     if file.filename == '':
         return jsonify({'error': 'No file selected'}), 400
         
-    original_filename = secure_filename(file.filename)
-    if not original_filename.lower().endswith('.pdf'):
+    raw_name = file.filename.strip()
+    if not raw_name.lower().endswith('.pdf'):
         return jsonify({'error': 'Only PDF files are allowed for task submissions'}), 400
+        
+    original_filename = secure_filename(raw_name)
+    if not original_filename or original_filename == '.pdf':
+        original_filename = f"task_submission_week_{week_num}.pdf"
+    elif not original_filename.lower().endswith('.pdf'):
+        original_filename += '.pdf'
         
     conn = get_db_connection()
     cursor = conn.cursor()
     
-    # Check application ownership
-    cursor.execute("SELECT * FROM applications WHERE id = ? AND (user_id = ? OR LOWER(user_id) = ?)", (application_id, g.user_id, g.user_email))
+    # Check application ownership by user_id OR profile email match
+    user_email_clean = (g.user_email or '').lower().strip()
+    cursor.execute("""
+        SELECT a.* FROM applications a
+        LEFT JOIN profiles p ON a.user_id = p.id
+        WHERE a.id = ? AND (
+            a.user_id = ? OR LOWER(a.user_id) = ? OR 
+            (p.email IS NOT NULL AND LOWER(p.email) = ?) OR
+            (p.id IS NOT NULL AND p.id = ?)
+        )
+    """, (application_id, g.user_id, user_email_clean, user_email_clean, g.user_id))
     app_record = cursor.fetchone()
     if not app_record:
         conn.close()
         return jsonify({'error': 'Application not found or unauthorized'}), 403
+
+    # Ensure target submission upload directory exists
+    os.makedirs(Config.SUBMISSIONS_DIR, exist_ok=True)
 
     # Generate safe unique filename
     file_id = str(uuid.uuid4())[:8]

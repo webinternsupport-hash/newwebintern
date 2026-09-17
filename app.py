@@ -19,6 +19,7 @@ from routes.submission_routes import submission_bp
 from routes.certificate_routes import certificate_bp
 from routes.payment_routes import payment_bp
 from routes.admin_routes import admin_bp
+from routes.referral_routes import referral_bp
 from utils.logger import log_info, log_success
 
 def create_app():
@@ -50,6 +51,7 @@ def create_app():
         ('certificate', certificate_bp),
         ('payment', payment_bp),
         ('admin', admin_bp),
+        ('referral', referral_bp),
     ]
     
     for bp_name, bp in blueprints:

@@ -55,14 +55,27 @@ def register():
         user_id = str(uuid.uuid4())
         
     pw_hash = hash_password(password)
+    my_ref_code = f"WIREF-{uuid.uuid4().hex[:6].upper()}"
+    provided_ref_code = str(data.get('referral_code') or data.get('ref') or '').strip().upper()
     
     cursor.execute("""
         INSERT INTO profiles (
             id, full_name, email, phone, phone_country_code, college, department, degree,
-            password_hash, auth_provider, mobile, terms_accepted, marketing_opt_in, created_at
-        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, 'email', ?, ?, ?, CURRENT_TIMESTAMP)
-    """, (user_id, full_name, email, phone, phone_country_code, college, department, degree, pw_hash, phone, terms_accepted, marketing_opt_in))
+            password_hash, auth_provider, mobile, terms_accepted, marketing_opt_in, referral_code, created_at
+        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, 'email', ?, ?, ?, ?, CURRENT_TIMESTAMP)
+    """, (user_id, full_name, email, phone, phone_country_code, college, department, degree, pw_hash, phone, terms_accepted, marketing_opt_in, my_ref_code))
     
+    # Process referral relationship if referral_code provided
+    if provided_ref_code:
+        cursor.execute("SELECT id FROM profiles WHERE UPPER(referral_code) = ?", (provided_ref_code,))
+        ref_user = cursor.fetchone()
+        if ref_user and ref_user['id'] != user_id:
+            ref_id = str(uuid.uuid4())
+            cursor.execute("""
+                INSERT INTO referrals (id, referrer_user_id, referred_user_id, referral_code, status, created_at)
+                VALUES (?, ?, ?, ?, 'registered', CURRENT_TIMESTAMP)
+            """, (ref_id, ref_user['id'], user_id, provided_ref_code))
+
     conn.commit()
     conn.close()
     
@@ -319,10 +332,22 @@ def google_sync():
         cursor.execute("UPDATE profiles SET google_account_id = ?, auth_provider = 'google' WHERE id = ?", (google_sub, user_id))
     else:
         user_id = str(uuid.uuid4())
+        my_ref_code = f"WIREF-{uuid.uuid4().hex[:6].upper()}"
         cursor.execute("""
-            INSERT INTO profiles (id, full_name, email, auth_provider, google_account_id, created_at)
-            VALUES (?, ?, ?, 'google', ?, CURRENT_TIMESTAMP)
-        """, (user_id, full_name, email, google_sub))
+            INSERT INTO profiles (id, full_name, email, auth_provider, google_account_id, referral_code, created_at)
+            VALUES (?, ?, ?, 'google', ?, ?, CURRENT_TIMESTAMP)
+        """, (user_id, full_name, email, google_sub, my_ref_code))
+        
+        provided_ref_code = str(data.get('referral_code') or data.get('ref') or '').strip().upper()
+        if provided_ref_code:
+            cursor.execute("SELECT id FROM profiles WHERE UPPER(referral_code) = ?", (provided_ref_code,))
+            ref_user = cursor.fetchone()
+            if ref_user and ref_user['id'] != user_id:
+                ref_id = str(uuid.uuid4())
+                cursor.execute("""
+                    INSERT INTO referrals (id, referrer_user_id, referred_user_id, referral_code, status, created_at)
+                    VALUES (?, ?, ?, ?, 'registered', CURRENT_TIMESTAMP)
+                """, (ref_id, ref_user['id'], user_id, provided_ref_code))
         
     conn.commit()
     conn.close()

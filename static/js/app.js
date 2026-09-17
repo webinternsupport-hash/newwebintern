@@ -216,7 +216,10 @@ class App {
       view = await renderExploreView(); // Explore view with sector pre-selected
     } else if (hash === '#/dashboard') {
       document.getElementById('bar-tab-profile')?.classList.add('active');
-      view = await renderDashboardView();
+      view = await renderDashboardView('internships');
+    } else if (hash === '#/referrals' || hash.startsWith('#/refer')) {
+      document.getElementById('bar-tab-profile')?.classList.add('active');
+      view = await renderDashboardView('referrals');
     } else if (hash === '#/login') {
       view = renderLoginView();
     } else if (hash === '#/register') {
