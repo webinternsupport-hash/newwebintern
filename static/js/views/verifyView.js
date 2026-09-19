@@ -86,36 +86,12 @@ export async function renderVerifyView(certId) {
 
       <!-- Action Button -->
       <div style="margin-top: 28px; text-align: center;">
-        <button id="download-pdf-btn" class="btn btn-primary btn-block" style="font-size: 1rem; padding: 12px; cursor: pointer;">
+        <a href="${pdfDownloadUrl}" target="_blank" class="btn btn-primary btn-block" style="font-size: 1rem; padding: 12px;">
           ${pdfButtonLabel}
-        </button>
+        </a>
       </div>
     </div>
   `;
-
-  // Add download event handler
-  const downloadBtn = container.querySelector('#download-pdf-btn');
-  if (downloadBtn) {
-    downloadBtn.addEventListener('click', async () => {
-      downloadBtn.disabled = true;
-      downloadBtn.textContent = '⏳ Preparing download...';
-      try {
-        const filename = isOfferLetter 
-          ? `Offer_Letter_${certData.certificate_id}.pdf`
-          : `Certificate_${certData.certificate_id}.pdf`;
-        await API.downloadFile(pdfDownloadUrl, filename);
-        downloadBtn.textContent = pdfButtonLabel;
-        downloadBtn.disabled = false;
-      } catch (err) {
-        console.error('Download failed:', err);
-        downloadBtn.textContent = '❌ Download Failed - Try Again';
-        downloadBtn.disabled = false;
-        setTimeout(() => {
-          downloadBtn.textContent = pdfButtonLabel;
-        }, 2000);
-      }
-    });
-  }
 
   return container;
 

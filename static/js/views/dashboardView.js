@@ -170,9 +170,9 @@ export async function renderDashboardView(defaultTab = 'internships') {
                 <!-- Actions -->
                 <div style="display: flex; flex-direction: column; gap: 8px; border-top: 1px solid var(--border-color); padding-top: 16px;">
                   <div style="display: flex; gap: 8px;">
-                    <button class="btn btn-outline btn-sm download-offer-btn" data-app-id="${app.id}" style="flex: 1;">
+                    <a href="/api/applications/${app.id}/offer-letter.pdf" target="_blank" class="btn btn-outline btn-sm" style="flex: 1;">
                       📄 View Offer Letter
-                    </button>
+                    </a>
                     <button class="btn btn-primary btn-sm open-workspace-btn" data-app-id="${app.id}" style="flex: 1;">
                       💻 Tasks Workspace
                     </button>
@@ -180,9 +180,9 @@ export async function renderDashboardView(defaultTab = 'internships') {
 
                   ${app.is_verified_paid ? (
                     app.is_tenure_completed ? `
-                      <button class="btn btn-success btn-sm btn-block download-cert-btn" data-cert-id="${app.certificate_id}">
+                      <a href="/api/certificates/${app.certificate_id}/pdf" target="_blank" class="btn btn-success btn-sm btn-block">
                         🏆 Download Verified Certificate (PDF)
-                      </button>
+                      </a>
                     ` : `
                       <button class="btn btn-outline btn-sm btn-block" disabled style="color: var(--success); font-weight: 600; cursor: not-allowed;">
                         ⏳ Fee Paid — Available on Tenure End (${app.end_date})
@@ -535,56 +535,6 @@ export async function renderDashboardView(defaultTab = 'internships') {
           alert('Payment error: ' + err.message);
           btn.disabled = false;
           btn.textContent = '🔓 Unlock Official Verified Certificate (₹199)';
-        }
-      });
-    });
-
-    // Offer Letter Download Handlers
-    container.querySelectorAll('.download-offer-btn').forEach(btn => {
-      btn.addEventListener('click', async () => {
-        const appId = btn.getAttribute('data-app-id');
-        btn.disabled = true;
-        const originalText = btn.textContent;
-        btn.textContent = '⏳ Preparing...';
-        try {
-          await API.downloadFile(`/api/applications/${appId}/offer-letter.pdf`, `Offer_Letter_${appId}.pdf`);
-          btn.textContent = '✓ Downloaded';
-          setTimeout(() => {
-            btn.disabled = false;
-            btn.textContent = originalText;
-          }, 2000);
-        } catch (err) {
-          console.error('Offer letter download failed:', err);
-          btn.textContent = '❌ Download Failed';
-          setTimeout(() => {
-            btn.disabled = false;
-            btn.textContent = originalText;
-          }, 2000);
-        }
-      });
-    });
-
-    // Certificate Download Handlers
-    container.querySelectorAll('.download-cert-btn').forEach(btn => {
-      btn.addEventListener('click', async () => {
-        const certId = btn.getAttribute('data-cert-id');
-        btn.disabled = true;
-        const originalText = btn.textContent;
-        btn.textContent = '⏳ Preparing...';
-        try {
-          await API.downloadFile(`/api/certificates/${certId}/pdf`, `Certificate_${certId}.pdf`);
-          btn.textContent = '✓ Downloaded';
-          setTimeout(() => {
-            btn.disabled = false;
-            btn.textContent = originalText;
-          }, 2000);
-        } catch (err) {
-          console.error('Certificate download failed:', err);
-          btn.textContent = '❌ Download Failed';
-          setTimeout(() => {
-            btn.disabled = false;
-            btn.textContent = originalText;
-          }, 2000);
         }
       });
     });

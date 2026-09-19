@@ -85,7 +85,7 @@ Check out Web Intern! 💻✨
 ⚡ No complicated application process
 
 Join Web Intern here: 👇
-https://webintern.in/#/register?ref={ref_code}
+{referral_link}
 
 If you're a college student looking for an internship, definitely check it out and share it with your friends! 🌟
 Start your internship journey today! 🔥💪"""

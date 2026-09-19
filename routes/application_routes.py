@@ -351,6 +351,6 @@ def download_offer_letter(app_id):
     return send_file(
         file_path,
         mimetype='application/pdf',
-        as_attachment=True,
+        as_attachment=False,
         download_name=f"Offer_Letter_{doc_number}.pdf"
     )

@@ -284,6 +284,6 @@ def download_certificate_pdf(cert_id):
     return send_file(
         pdf_path,
         mimetype='application/pdf',
-        as_attachment=True,
+        as_attachment=False,
         download_name=f"Certificate_{cert_id}.pdf"
     )
